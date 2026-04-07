@@ -12,8 +12,6 @@ let currentPixCode = '';
 let currentTicketUrl = '';
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
-/** @type {ReturnType<typeof setTimeout> | null} */
-let autoGenerateTimer = null;
 /** @type {boolean} */
 let isGeneratingPix = false;
 
@@ -43,23 +41,24 @@ $w.onReady(function () {
   prepararTela();
   configurarBotoesDeValor();
   configurarBotaoGerar();
-  configurarAutoGeracao();
   configurarCliqueNoCodigo();
 });
 
 /**
- * Registra clique e toque para cobrir melhor o comportamento no mobile da Wix.
+ * Usa apenas um tipo de evento por elemento para evitar disparo duplo no mobile.
  * @param {*} seletor
  * @param {() => void | Promise<void>} acao
  */
 function registrarAcaoDeToque(seletor, acao) {
   /** @type {any} */
   const elemento = $w(seletor);
-  elemento.onClick(acao);
 
   if (typeof elemento.onPress === 'function') {
     elemento.onPress(acao);
+    return;
   }
+
+  elemento.onClick(acao);
 }
 
 function prepararTela() {
@@ -105,7 +104,6 @@ function configurarBotoesDeValor() {
 function selecionarValor(valor) {
   $w('#inputValor').value = valor;
   $w('#txtMensagem').text = `Valor selecionado: R$${valor},00`;
-  agendarGeracaoAutomatica();
 }
 
 function configurarBotaoGerar() {
@@ -114,30 +112,7 @@ function configurarBotaoGerar() {
   });
 }
 
-function configurarAutoGeracao() {
-  $w('#inputValor').onInput(() => {
-    agendarGeracaoAutomatica();
-  });
-
-  $w('#inputEmail').onInput(() => {
-    agendarGeracaoAutomatica();
-  });
-}
-
-function agendarGeracaoAutomatica() {
-  if (autoGenerateTimer) {
-    clearTimeout(autoGenerateTimer);
-  }
-
-  autoGenerateTimer = setTimeout(() => {
-    gerarPix({ automatico: true });
-  }, 900);
-}
-
-/**
- * @param {{ automatico?: boolean }=} options
- */
-async function gerarPix(options = {}) {
+async function gerarPix() {
   if (isGeneratingPix) {
     return;
   }
@@ -148,20 +123,16 @@ async function gerarPix(options = {}) {
   const amount = Number(amountRaw.replace(',', '.'));
 
   if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
-    if (!options.automatico) {
-      await $w('#inputValor').scrollTo();
-      $w('#inputValor').focus();
-      $w('#txtMensagem').text = 'Digite um valor valido para continuar';
-    }
+    await $w('#inputValor').scrollTo();
+    $w('#inputValor').focus();
+    $w('#txtMensagem').text = 'Digite um valor valido para continuar';
     return;
   }
 
   if (emailInput && (!email.includes('@') || !email.includes('.'))) {
-    if (!options.automatico) {
-      await $w('#inputEmail').scrollTo();
-      $w('#inputEmail').focus();
-      $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
-    }
+    await $w('#inputEmail').scrollTo();
+    $w('#inputEmail').focus();
+    $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
     return;
   }
 
@@ -175,8 +146,6 @@ async function gerarPix(options = {}) {
       20000,
       'A geracao do Pix demorou demais. Tente novamente.'
     );
-
-    console.log('RESULTADO FRONT:', result);
 
     currentDonationId = result.donationId || null;
     currentPixCode = result.pixCode || '';
@@ -329,7 +298,6 @@ function iniciarConsultaStatus() {
 
     try {
       const result = await getPixStatus(currentDonationId);
-      console.log('STATUS FRONT:', result);
 
       if (result && result.status) {
         $w('#txtStatus').text = 'Status: ' + traduzirStatus(result.status);
