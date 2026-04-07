@@ -30,15 +30,29 @@ $w.onReady(function () {
     }, 2000);
   };
 
-  $w('#btnCopiarPix').onClick(copiarPixFixo);
-  $w('#ajudaPix').onClick(copiarPixFixo);
-  $w('#text2').onClick(copiarPixFixo);
+  registrarAcaoDeToque('#btnCopiarPix', copiarPixFixo);
+  registrarAcaoDeToque('#ajudaPix', copiarPixFixo);
+  registrarAcaoDeToque('#text2', copiarPixFixo);
 
   prepararTela();
   configurarBotoesDeValor();
   configurarBotaoGerar();
   configurarCliqueNoCodigo();
 });
+
+/**
+ * Registra clique e toque para cobrir melhor o comportamento no mobile da Wix.
+ * @param {string} seletor
+ * @param {() => void | Promise<void>} acao
+ */
+function registrarAcaoDeToque(seletor, acao) {
+  const elemento = $w(seletor);
+  elemento.onClick(acao);
+
+  if (typeof elemento.onPress === 'function') {
+    elemento.onPress(acao);
+  }
+}
 
 function prepararTela() {
   $w('#inputValor').value = '';
@@ -71,10 +85,10 @@ function prepararTela() {
 }
 
 function configurarBotoesDeValor() {
-  $w('#btn20').onClick(() => selecionarValor('20'));
-  $w('#btn30').onClick(() => selecionarValor('30'));
-  $w('#btn50').onClick(() => selecionarValor('50'));
-  $w('#btn100').onClick(() => selecionarValor('100'));
+  registrarAcaoDeToque('#btn20', () => selecionarValor('20'));
+  registrarAcaoDeToque('#btn30', () => selecionarValor('30'));
+  registrarAcaoDeToque('#btn50', () => selecionarValor('50'));
+  registrarAcaoDeToque('#btn100', () => selecionarValor('100'));
 }
 
 /**
@@ -86,7 +100,7 @@ function selecionarValor(valor) {
 }
 
 function configurarBotaoGerar() {
-  $w('#btnGerarPix').onClick(async () => {
+  registrarAcaoDeToque('#btnGerarPix', async () => {
     const amountRaw = String($w('#inputValor').value || '').trim();
     const email = String($w('#inputEmail').value || '').trim();
     const amount = Number(amountRaw.replace(',', '.'));
@@ -167,11 +181,11 @@ function configurarBotaoGerar() {
 }
 
 function configurarCliqueNoCodigo() {
-  $w('#txtPix').onClick(async () => {
+  registrarAcaoDeToque('#txtPix', async () => {
     await copiarCodigoPix();
   });
 
-  $w('#txtLinkPix').onClick(() => {
+  registrarAcaoDeToque('#txtLinkPix', () => {
     abrirLinkPix();
   });
 }
