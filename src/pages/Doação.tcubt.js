@@ -12,6 +12,9 @@ let currentPixCode = '';
 let currentTicketUrl = '';
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let autoGenerateTimer = null;
+let isGeneratingPix = false;
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
@@ -39,6 +42,7 @@ $w.onReady(function () {
   prepararTela();
   configurarBotoesDeValor();
   configurarBotaoGerar();
+  configurarAutoGeracao();
   configurarCliqueNoCodigo();
 });
 
@@ -103,86 +107,139 @@ function selecionarValor(valor) {
 
 function configurarBotaoGerar() {
   registrarAcaoDeToque('#btnGerarPix', async () => {
-    const amountRaw = String($w('#inputValor').value || '').trim();
-    const emailInput = String($w('#inputEmail').value || '').trim();
-    const email = emailInput || DEFAULT_PAYER_EMAIL;
-    const amount = Number(amountRaw.replace(',', '.'));
+    await gerarPix();
+  });
+}
 
-    limparResultado();
-    $w('#txtMensagem').text = 'Gerando QR Code...';
+function configurarAutoGeracao() {
+  $w('#inputValor').onInput(() => {
+    agendarGeracaoAutomatica();
+  });
 
-    if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
+  $w('#inputEmail').onInput(() => {
+    agendarGeracaoAutomatica();
+  });
+}
+
+function agendarGeracaoAutomatica() {
+  if (autoGenerateTimer) {
+    clearTimeout(autoGenerateTimer);
+  }
+
+  autoGenerateTimer = setTimeout(() => {
+    gerarPix({ automatico: true });
+  }, 900);
+}
+
+/**
+ * @param {{ automatico?: boolean }=} options
+ */
+async function gerarPix(options = {}) {
+  if (isGeneratingPix) {
+    return;
+  }
+
+  const amountRaw = String($w('#inputValor').value || '').trim();
+  const emailInput = String($w('#inputEmail').value || '').trim();
+  const email = emailInput || DEFAULT_PAYER_EMAIL;
+  const amount = Number(amountRaw.replace(',', '.'));
+
+  if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
+    if (!options.automatico) {
       await $w('#inputValor').scrollTo();
       $w('#inputValor').focus();
       $w('#txtMensagem').text = 'Digite um valor valido para continuar';
-      return;
     }
+    return;
+  }
 
-    if (emailInput && (!email.includes('@') || !email.includes('.'))) {
+  if (emailInput && (!email.includes('@') || !email.includes('.'))) {
+    if (!options.automatico) {
       await $w('#inputEmail').scrollTo();
       $w('#inputEmail').focus();
       $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
-      return;
+    }
+    return;
+  }
+
+  isGeneratingPix = true;
+  limparResultado();
+  $w('#txtMensagem').text = 'Gerando QR Code...';
+
+  try {
+    const result = await comTimeout(
+      createPixCharge({ amount, email }),
+      20000,
+      'A geracao do Pix demorou demais. Tente novamente.'
+    );
+    console.log('RESULTADO FRONT:', result);
+
+    currentDonationId = result.donationId || null;
+    currentPixCode = result.pixCode || '';
+    currentTicketUrl = result.ticketUrl || '';
+
+    if (result.qrCodeImage) {
+      $w('#imgQr').src = result.qrCodeImage;
+      $w('#imgQr').expand();
+      $w('#imgQr').show();
     }
 
-    try {
-      const result = await createPixCharge({ amount, email });
-      console.log('RESULTADO FRONT:', result);
+    if (currentTicketUrl) {
+      $w('#txtPix').text = '';
+      $w('#txtPix').hide();
+      $w('#txtPix').collapse();
 
-      currentDonationId = result.donationId || null;
-      currentPixCode = result.pixCode || '';
-      currentTicketUrl = result.ticketUrl || '';
+      $w('#txtLinkPix').text = 'Abrir pagamento no Mercado Pago';
+      $w('#txtLinkPix').expand();
+      $w('#txtLinkPix').show();
 
-      if (result.qrCodeImage) {
-        $w('#imgQr').src = result.qrCodeImage;
-        $w('#imgQr').expand();
-        $w('#imgQr').show();
-      }
+      $w('#txtAjuda').text = 'Toque no link do Mercado Pago ou leia o QR Code';
+      $w('#txtAjuda').expand();
+      $w('#txtAjuda').show();
+    } else if (currentPixCode) {
+      $w('#txtPix').text = currentPixCode;
+      $w('#txtPix').expand();
+      $w('#txtPix').show();
 
-      if (currentTicketUrl) {
-        $w('#txtPix').text = '';
-        $w('#txtPix').hide();
-        $w('#txtPix').collapse();
-
-        $w('#txtLinkPix').text = 'Abrir pagamento no Mercado Pago';
-        $w('#txtLinkPix').expand();
-        $w('#txtLinkPix').show();
-
-        $w('#txtAjuda').text = 'Toque no link do Mercado Pago ou leia o QR Code';
-        $w('#txtAjuda').expand();
-        $w('#txtAjuda').show();
-      } else if (currentPixCode) {
-        $w('#txtPix').text = currentPixCode;
-        $w('#txtPix').expand();
-        $w('#txtPix').show();
-
-        $w('#txtAjuda').text = 'Clique no codigo para copiar ou leia o QR Code';
-        $w('#txtAjuda').expand();
-        $w('#txtAjuda').show();
-      }
-
-      if (result.status) {
-        $w('#txtStatus').text = 'Status: ' + traduzirStatus(result.status);
-        $w('#txtStatus').expand();
-        $w('#txtStatus').show();
-      }
-
-      if (result.expiresAt) {
-        $w('#txtExpiracao').text =
-          'Expira em: ' + new Date(result.expiresAt).toLocaleString('pt-BR');
-        $w('#txtExpiracao').expand();
-        $w('#txtExpiracao').show();
-      }
-
-      $w('#txtMensagem').text = emailInput
-        ? 'Seu QR Code aparecera aqui'
-        : 'QR Code gerado com email padrao';
-      iniciarConsultaStatus();
-    } catch (error) {
-      console.log('Erro ao gerar PIX:', error);
-      $w('#txtMensagem').text = 'Erro ao gerar PIX';
+      $w('#txtAjuda').text = 'Clique no codigo para copiar ou leia o QR Code';
+      $w('#txtAjuda').expand();
+      $w('#txtAjuda').show();
     }
-  });
+
+    if (result.status) {
+      $w('#txtStatus').text = 'Status: ' + traduzirStatus(result.status);
+      $w('#txtStatus').expand();
+      $w('#txtStatus').show();
+    }
+
+    if (result.expiresAt) {
+      $w('#txtExpiracao').text =
+        'Expira em: ' + new Date(result.expiresAt).toLocaleString('pt-BR');
+      $w('#txtExpiracao').expand();
+      $w('#txtExpiracao').show();
+    }
+
+    $w('#txtMensagem').text = emailInput
+      ? 'Seu QR Code aparecera aqui'
+      : 'QR Code gerado com email padrao';
+    iniciarConsultaStatus();
+  } catch (error) {
+    console.log('Erro ao gerar PIX:', error);
+    $w('#txtMensagem').text = error.message || 'Erro ao gerar PIX';
+  } finally {
+    isGeneratingPix = false;
+  }
+}
+
+function comTimeout(promise, timeoutMs, mensagem) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(mensagem));
+      }, timeoutMs);
+    })
+  ]);
 }
 
 function configurarCliqueNoCodigo() {
