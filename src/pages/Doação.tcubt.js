@@ -1,10 +1,13 @@
 import { createPixCharge, getPixStatus } from 'backend/pix.web';
+import wixLocationFrontend from 'wix-location-frontend';
 import wixWindowFrontend from 'wix-window-frontend';
 
 /** @type {string | null} */
 let currentDonationId = null;
 /** @type {string} */
 let currentPixCode = '';
+/** @type {string} */
+let currentTicketUrl = '';
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
 
@@ -114,6 +117,7 @@ function configurarBotaoGerar() {
 
       currentDonationId = result.donationId || null;
       currentPixCode = result.pixCode || '';
+      currentTicketUrl = result.ticketUrl || '';
 
       if (result.qrCodeImage) {
         $w('#imgQr').src = result.qrCodeImage;
@@ -121,7 +125,19 @@ function configurarBotaoGerar() {
         $w('#imgQr').show();
       }
 
-      if (currentPixCode) {
+      if (currentTicketUrl) {
+        $w('#txtPix').text = '';
+        $w('#txtPix').hide();
+        $w('#txtPix').collapse();
+
+        $w('#txtLinkPix').text = 'Abrir pagamento no Mercado Pago';
+        $w('#txtLinkPix').expand();
+        $w('#txtLinkPix').show();
+
+        $w('#txtAjuda').text = 'Toque no link do Mercado Pago ou leia o QR Code';
+        $w('#txtAjuda').expand();
+        $w('#txtAjuda').show();
+      } else if (currentPixCode) {
         $w('#txtPix').text = currentPixCode;
         $w('#txtPix').expand();
         $w('#txtPix').show();
@@ -129,12 +145,6 @@ function configurarBotaoGerar() {
         $w('#txtAjuda').text = 'Clique no codigo para copiar ou leia o QR Code';
         $w('#txtAjuda').expand();
         $w('#txtAjuda').show();
-      }
-
-      if (result.ticketUrl) {
-        $w('#txtLinkPix').text = result.ticketUrl;
-        $w('#txtLinkPix').expand();
-        $w('#txtLinkPix').show();
       }
 
       if (result.status) {
@@ -163,6 +173,10 @@ function configurarCliqueNoCodigo() {
   $w('#txtPix').onClick(async () => {
     await copiarCodigoPix();
   });
+
+  $w('#txtLinkPix').onClick(() => {
+    abrirLinkPix();
+  });
 }
 
 async function copiarCodigoPix() {
@@ -180,9 +194,16 @@ async function copiarCodigoPix() {
   $w('#txtAjuda').show();
 }
 
+function abrirLinkPix() {
+  if (!currentTicketUrl) return;
+
+  wixLocationFrontend.to(currentTicketUrl);
+}
+
 function limparResultado() {
   currentDonationId = null;
   currentPixCode = '';
+  currentTicketUrl = '';
 
   if (pollTimer) {
     clearInterval(pollTimer);
