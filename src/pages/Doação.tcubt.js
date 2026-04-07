@@ -14,6 +14,7 @@ let currentTicketUrl = '';
 let pollTimer = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let autoGenerateTimer = null;
+/** @type {boolean} */
 let isGeneratingPix = false;
 
 $w.onReady(function () {
@@ -23,10 +24,10 @@ $w.onReady(function () {
 
   const copiarPixFixo = async () => {
     try {
-      await wixWindowFrontend.copyToClipboard('doe@institutocomuta.org.br');
+      await wixWindowFrontend.copyToClipboard(DEFAULT_PAYER_EMAIL);
       $w('#ajudaPix').text = 'Pix copiado';
     } catch (error) {
-      console.log('Erro ao copiar Pix:', error);
+      console.log('Erro ao copiar Pix:', getErrorMessage(error));
       $w('#ajudaPix').text = 'Nao foi possivel copiar o Pix';
     }
 
@@ -103,6 +104,7 @@ function configurarBotoesDeValor() {
 function selecionarValor(valor) {
   $w('#inputValor').value = valor;
   $w('#txtMensagem').text = `Valor selecionado: R$${valor},00`;
+  agendarGeracaoAutomatica();
 }
 
 function configurarBotaoGerar() {
@@ -172,6 +174,7 @@ async function gerarPix(options = {}) {
       20000,
       'A geracao do Pix demorou demais. Tente novamente.'
     );
+
     console.log('RESULTADO FRONT:', result);
 
     currentDonationId = result.donationId || null;
@@ -222,15 +225,23 @@ async function gerarPix(options = {}) {
     $w('#txtMensagem').text = emailInput
       ? 'Seu QR Code aparecera aqui'
       : 'QR Code gerado com email padrao';
+
     iniciarConsultaStatus();
   } catch (error) {
-    console.log('Erro ao gerar PIX:', error);
-    $w('#txtMensagem').text = error.message || 'Erro ao gerar PIX';
+    console.log('Erro ao gerar PIX:', getErrorMessage(error));
+    $w('#txtMensagem').text = getErrorMessage(error) || 'Erro ao gerar PIX';
   } finally {
     isGeneratingPix = false;
   }
 }
 
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} timeoutMs
+ * @param {string} mensagem
+ * @returns {Promise<T>}
+ */
 function comTimeout(promise, timeoutMs, mensagem) {
   return Promise.race([
     promise,
@@ -259,7 +270,7 @@ async function copiarCodigoPix() {
     await wixWindowFrontend.copyToClipboard(currentPixCode);
     $w('#txtAjuda').text = 'Codigo copiado com sucesso.';
   } catch (error) {
-    console.log('Falha ao copiar:', error);
+    console.log('Falha ao copiar:', getErrorMessage(error));
     $w('#txtAjuda').text = 'Nao foi possivel copiar automaticamente.';
   }
 
@@ -325,9 +336,21 @@ function iniciarConsultaStatus() {
         $w('#txtStatus').show();
       }
     } catch (error) {
-      console.log('Erro ao consultar status:', error);
+      console.log('Erro ao consultar status:', getErrorMessage(error));
     }
   }, 15000);
+}
+
+/**
+ * @param {unknown} error
+ * @returns {string}
+ */
+function getErrorMessage(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error || 'Erro desconhecido');
 }
 
 /**
