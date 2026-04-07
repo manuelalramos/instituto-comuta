@@ -71,21 +71,18 @@ function prepararTela() {
 }
 
 function configurarBotoesDeValor() {
-  $w('#btn20').onClick(() => {
-    $w('#inputValor').value = '20';
-  });
+  $w('#btn20').onClick(() => selecionarValor('20'));
+  $w('#btn30').onClick(() => selecionarValor('30'));
+  $w('#btn50').onClick(() => selecionarValor('50'));
+  $w('#btn100').onClick(() => selecionarValor('100'));
+}
 
-  $w('#btn30').onClick(() => {
-    $w('#inputValor').value = '30';
-  });
-
-  $w('#btn50').onClick(() => {
-    $w('#inputValor').value = '50';
-  });
-
-  $w('#btn100').onClick(() => {
-    $w('#inputValor').value = '100';
-  });
+/**
+ * @param {string} valor
+ */
+function selecionarValor(valor) {
+  $w('#inputValor').value = valor;
+  $w('#txtMensagem').text = `Valor selecionado: R$${valor},00`;
 }
 
 function configurarBotaoGerar() {
@@ -100,14 +97,14 @@ function configurarBotaoGerar() {
     if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
       await $w('#inputValor').scrollTo();
       $w('#inputValor').focus();
-      $w('#txtMensagem').text = 'Seu QR Code aparecera aqui';
+      $w('#txtMensagem').text = 'Digite um valor valido para continuar';
       return;
     }
 
     if (!email || !email.includes('@') || !email.includes('.')) {
       await $w('#inputEmail').scrollTo();
       $w('#inputEmail').focus();
-      $w('#txtMensagem').text = 'Seu QR Code aparecera aqui';
+      $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
       return;
     }
 
