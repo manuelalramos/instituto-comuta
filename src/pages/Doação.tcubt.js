@@ -14,6 +14,8 @@ let currentTicketUrl = '';
 let pollTimer = null;
 /** @type {boolean} */
 let isGeneratingPix = false;
+const TOUCH_DEDUPE_MS = 400;
+const lastTouchActionAt = {};
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
@@ -45,20 +47,36 @@ $w.onReady(function () {
 });
 
 /**
- * Usa apenas um tipo de evento por elemento para evitar disparo duplo no mobile.
+ * Registra handlers de toque/click com deduplicacao para cobrir melhor o mobile.
  * @param {*} seletor
  * @param {() => void | Promise<void>} acao
  */
 function registrarAcaoDeToque(seletor, acao) {
   /** @type {any} */
   const elemento = $w(seletor);
+  const executarComDedupe = () => {
+    const agora = Date.now();
+    const ultimoToque = lastTouchActionAt[seletor] || 0;
 
-  if (typeof elemento.onPress === 'function') {
-    elemento.onPress(acao);
-    return;
+    if (agora - ultimoToque < TOUCH_DEDUPE_MS) {
+      return;
+    }
+
+    lastTouchActionAt[seletor] = agora;
+    return acao();
+  };
+
+  if (typeof elemento.onPressIn === 'function') {
+    elemento.onPressIn(executarComDedupe);
   }
 
-  elemento.onClick(acao);
+  if (typeof elemento.onPress === 'function') {
+    elemento.onPress(executarComDedupe);
+  }
+
+  if (typeof elemento.onClick === 'function') {
+    elemento.onClick(executarComDedupe);
+  }
 }
 
 function prepararTela() {
@@ -96,6 +114,11 @@ function configurarBotoesDeValor() {
   registrarAcaoDeToque('#btn30', () => selecionarValor('30'));
   registrarAcaoDeToque('#btn50', () => selecionarValor('50'));
   registrarAcaoDeToque('#btn100', () => selecionarValor('100'));
+
+  $w('#btn20').enable();
+  $w('#btn30').enable();
+  $w('#btn50').enable();
+  $w('#btn100').enable();
 }
 
 /**
