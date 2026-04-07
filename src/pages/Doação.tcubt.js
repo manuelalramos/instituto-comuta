@@ -49,10 +49,11 @@ $w.onReady(function () {
 
 /**
  * Registra clique e toque para cobrir melhor o comportamento no mobile da Wix.
- * @param {string} seletor
+ * @param {*} seletor
  * @param {() => void | Promise<void>} acao
  */
 function registrarAcaoDeToque(seletor, acao) {
+  /** @type {any} */
   const elemento = $w(seletor);
   elemento.onClick(acao);
 
