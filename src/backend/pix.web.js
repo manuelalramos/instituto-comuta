@@ -11,11 +11,11 @@ async function getMercadoPagoConfig() {
   const apiUrl = await getSecret('PIX_API_URL');
 
   if (!token) {
-    throw new Error('Segredo PIX_API_TOKEN nao encontrado.');
+    throw new Error('Segredo PIX_API_TOKEN não encontrado.');
   }
 
   if (!apiUrl) {
-    throw new Error('Segredo PIX_API_URL nao encontrado.');
+    throw new Error('Segredo PIX_API_URL não encontrado.');
   }
 
   return { token, apiUrl };
@@ -61,7 +61,7 @@ export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, em
     },
     body: JSON.stringify({
       transaction_amount: normalizedAmount,
-      description: 'Doacao Instituto Comuta',
+      description: 'Doação Instituto Comuta',
       payment_method_id: 'pix',
       payer: {
         email: normalizedEmail
@@ -79,7 +79,7 @@ export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, em
   const pix = extractPixData(raw);
 
   if (!pix.donationId) {
-    throw new Error('Mercado Pago nao retornou o ID do pagamento.');
+    throw new Error('Mercado Pago não retornou o ID do pagamento.');
   }
 
   return pix;
