@@ -1,8 +1,11 @@
 import { createPixCharge, getPixStatus } from 'backend/pix.web';
 import wixWindowFrontend from 'wix-window-frontend';
 
+/** @type {string | null} */
 let currentDonationId = null;
+/** @type {string} */
 let currentPixCode = '';
+/** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
 
 $w.onReady(function () {
@@ -233,6 +236,9 @@ function iniciarConsultaStatus() {
   }, 15000);
 }
 
+/**
+ * @param {string} status
+ */
 function traduzirStatus(status) {
   if (status === 'approved') return 'pago';
   if (status === 'pending') return 'aguardando pagamento';

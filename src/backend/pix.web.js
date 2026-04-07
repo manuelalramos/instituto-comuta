@@ -2,6 +2,23 @@ import { webMethod, Permissions } from 'wix-web-module';
 import { getSecret } from 'wix-secrets-backend';
 import { fetch } from 'wix-fetch';
 
+/**
+ * @typedef {Object} PixApiResponse
+ * @property {string | number=} id
+ * @property {string=} status
+ * @property {string | null=} date_of_expiration
+ * @property {string | null=} date_approved
+ * @property {{
+ *   transaction_data?: {
+ *     qr_code?: string,
+ *     qr_code_base64?: string,
+ *     ticket_url?: string
+ *   }
+ * }=} point_of_interaction
+ * @property {string=} message
+ * @property {string=} error
+ */
+
 function makeIdempotencyKey() {
   return `pix_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -21,6 +38,9 @@ async function getMercadoPagoConfig() {
   return { token, apiUrl };
 }
 
+/**
+ * @param {PixApiResponse} raw
+ */
 function extractPixData(raw) {
   const tx = raw?.point_of_interaction?.transaction_data || {};
 
