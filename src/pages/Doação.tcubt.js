@@ -2,6 +2,8 @@ import { createPixCharge, getPixStatus } from 'backend/pix.web';
 import wixLocationFrontend from 'wix-location-frontend';
 import wixWindowFrontend from 'wix-window-frontend';
 
+const DEFAULT_PAYER_EMAIL = 'doe@institutocomuta.org.br';
+
 /** @type {string | null} */
 let currentDonationId = null;
 /** @type {string} */
@@ -102,7 +104,8 @@ function selecionarValor(valor) {
 function configurarBotaoGerar() {
   registrarAcaoDeToque('#btnGerarPix', async () => {
     const amountRaw = String($w('#inputValor').value || '').trim();
-    const email = String($w('#inputEmail').value || '').trim();
+    const emailInput = String($w('#inputEmail').value || '').trim();
+    const email = emailInput || DEFAULT_PAYER_EMAIL;
     const amount = Number(amountRaw.replace(',', '.'));
 
     limparResultado();
@@ -115,7 +118,7 @@ function configurarBotaoGerar() {
       return;
     }
 
-    if (!email || !email.includes('@') || !email.includes('.')) {
+    if (emailInput && (!email.includes('@') || !email.includes('.'))) {
       await $w('#inputEmail').scrollTo();
       $w('#inputEmail').focus();
       $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
@@ -171,7 +174,9 @@ function configurarBotaoGerar() {
         $w('#txtExpiracao').show();
       }
 
-      $w('#txtMensagem').text = 'Seu QR Code aparecera aqui';
+      $w('#txtMensagem').text = emailInput
+        ? 'Seu QR Code aparecera aqui'
+        : 'QR Code gerado com email padrao';
       iniciarConsultaStatus();
     } catch (error) {
       console.log('Erro ao gerar PIX:', error);

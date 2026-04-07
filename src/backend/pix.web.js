@@ -2,6 +2,8 @@ import { webMethod, Permissions } from 'wix-web-module';
 import { getSecret } from 'wix-secrets-backend';
 import { fetch } from 'wix-fetch';
 
+const DEFAULT_PAYER_EMAIL = 'doe@institutocomuta.org.br';
+
 /**
  * @typedef {Object} PixApiResponse
  * @property {string | number=} id
@@ -60,13 +62,13 @@ function extractPixData(raw) {
 
 export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, email }) => {
   const normalizedAmount = Number(amount);
-  const normalizedEmail = String(email || '').trim();
+  const normalizedEmail = String(email || '').trim() || DEFAULT_PAYER_EMAIL;
 
   if (!normalizedAmount || Number.isNaN(normalizedAmount) || normalizedAmount <= 0) {
     throw new Error('Valor invalido.');
   }
 
-  if (!normalizedEmail || !normalizedEmail.includes('@')) {
+  if (!normalizedEmail.includes('@')) {
     throw new Error('Email obrigatorio.');
   }
 
