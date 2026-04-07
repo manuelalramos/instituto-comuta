@@ -14,8 +14,6 @@ let currentTicketUrl = '';
 let pollTimer = null;
 /** @type {boolean} */
 let isGeneratingPix = false;
-const TOUCH_DEDUPE_MS = 400;
-const lastTouchActionAt = {};
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
@@ -36,9 +34,9 @@ $w.onReady(function () {
     }, 2000);
   };
 
-  registrarAcaoDeToque('#btnCopiarPix', copiarPixFixo);
-  registrarAcaoDeToque('#ajudaPix', copiarPixFixo);
-  registrarAcaoDeToque('#text2', copiarPixFixo);
+  registrarClique('#btnCopiarPix', copiarPixFixo);
+  registrarClique('#ajudaPix', copiarPixFixo);
+  registrarClique('#text2', copiarPixFixo);
 
   prepararTela();
   configurarBotoesDeValor();
@@ -47,36 +45,15 @@ $w.onReady(function () {
 });
 
 /**
- * Registra handlers de toque/click com deduplicacao para cobrir melhor o mobile.
- * @param {*} seletor
+ * Na Wix website, `onClick` e o evento oficial para mouse e toque.
+ * Misturar `onPress` aqui virou a regressao mais provavel do mobile.
+ * @param {string} seletor
  * @param {() => void | Promise<void>} acao
  */
-function registrarAcaoDeToque(seletor, acao) {
-  /** @type {any} */
-  const elemento = $w(seletor);
-  const executarComDedupe = () => {
-    const agora = Date.now();
-    const ultimoToque = lastTouchActionAt[seletor] || 0;
-
-    if (agora - ultimoToque < TOUCH_DEDUPE_MS) {
-      return;
-    }
-
-    lastTouchActionAt[seletor] = agora;
+function registrarClique(seletor, acao) {
+  $w(seletor).onClick(() => {
     return acao();
-  };
-
-  if (typeof elemento.onPressIn === 'function') {
-    elemento.onPressIn(executarComDedupe);
-  }
-
-  if (typeof elemento.onPress === 'function') {
-    elemento.onPress(executarComDedupe);
-  }
-
-  if (typeof elemento.onClick === 'function') {
-    elemento.onClick(executarComDedupe);
-  }
+  });
 }
 
 function prepararTela() {
@@ -110,10 +87,10 @@ function prepararTela() {
 }
 
 function configurarBotoesDeValor() {
-  registrarAcaoDeToque('#btn20', () => selecionarValor('20'));
-  registrarAcaoDeToque('#btn30', () => selecionarValor('30'));
-  registrarAcaoDeToque('#btn50', () => selecionarValor('50'));
-  registrarAcaoDeToque('#btn100', () => selecionarValor('100'));
+  registrarClique('#btn20', () => selecionarValor('20'));
+  registrarClique('#btn30', () => selecionarValor('30'));
+  registrarClique('#btn50', () => selecionarValor('50'));
+  registrarClique('#btn100', () => selecionarValor('100'));
 
   $w('#btn20').enable();
   $w('#btn30').enable();
@@ -130,7 +107,9 @@ function selecionarValor(valor) {
 }
 
 function configurarBotaoGerar() {
-  registrarAcaoDeToque('#btnGerarPix', async () => {
+  $w('#btnGerarPix').enable();
+
+  registrarClique('#btnGerarPix', async () => {
     await gerarPix();
   });
 }
@@ -247,11 +226,11 @@ function comTimeout(promise, timeoutMs, mensagem) {
 }
 
 function configurarCliqueNoCodigo() {
-  registrarAcaoDeToque('#txtPix', async () => {
+  registrarClique('#txtPix', async () => {
     await copiarCodigoPix();
   });
 
-  registrarAcaoDeToque('#txtLinkPix', () => {
+  registrarClique('#txtLinkPix', () => {
     abrirLinkPix();
   });
 }
