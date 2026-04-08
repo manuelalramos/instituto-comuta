@@ -14,6 +14,9 @@ let currentTicketUrl = '';
 let pollTimer = null;
 /** @type {boolean} */
 let isGeneratingPix = false;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let autoGenerateTimer = null;
+const MOBILE_AUTO_GENERATE_DELAY_MS = 1500;
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
@@ -42,6 +45,7 @@ $w.onReady(function () {
   configurarBotoesDeValor();
   configurarBotaoGerar();
   configurarCliqueNoCodigo();
+  configurarFallbackMobile();
 });
 
 /**
@@ -104,6 +108,10 @@ function configurarBotoesDeValor() {
 function selecionarValor(valor) {
   $w('#inputValor').value = valor;
   $w('#txtMensagem').text = `Valor selecionado: R$${valor},00`;
+
+  if (isMobileFormFactor()) {
+    agendarGeracaoMobile();
+  }
 }
 
 function configurarBotaoGerar() {
@@ -115,6 +123,8 @@ function configurarBotaoGerar() {
 }
 
 async function gerarPix() {
+  limparGeracaoMobileAgendada();
+
   if (isGeneratingPix) {
     return;
   }
@@ -260,6 +270,7 @@ function limparResultado() {
   currentDonationId = null;
   currentPixCode = '';
   currentTicketUrl = '';
+  limparGeracaoMobileAgendada();
 
   if (pollTimer) {
     clearInterval(pollTimer);
@@ -288,6 +299,55 @@ function limparResultado() {
   $w('#txtLinkPix').text = '';
   $w('#txtLinkPix').hide();
   $w('#txtLinkPix').collapse();
+}
+
+function configurarFallbackMobile() {
+  if (!isMobileFormFactor()) {
+    return;
+  }
+
+  $w('#inputValor').onInput(() => {
+    agendarGeracaoMobile();
+  });
+
+  $w('#inputValor').onChange(() => {
+    agendarGeracaoMobile();
+  });
+
+  $w('#inputEmail').onInput(() => {
+    agendarGeracaoMobile();
+  });
+
+  $w('#inputEmail').onChange(() => {
+    agendarGeracaoMobile();
+  });
+}
+
+function agendarGeracaoMobile() {
+  limparGeracaoMobileAgendada();
+
+  const amountRaw = String($w('#inputValor').value || '').trim();
+  if (!amountRaw) {
+    return;
+  }
+
+  autoGenerateTimer = setTimeout(() => {
+    autoGenerateTimer = null;
+    void gerarPix();
+  }, MOBILE_AUTO_GENERATE_DELAY_MS);
+}
+
+function limparGeracaoMobileAgendada() {
+  if (!autoGenerateTimer) {
+    return;
+  }
+
+  clearTimeout(autoGenerateTimer);
+  autoGenerateTimer = null;
+}
+
+function isMobileFormFactor() {
+  return String(wixWindowFrontend.formFactor || '').toLowerCase() === 'mobile';
 }
 
 function iniciarConsultaStatus() {
