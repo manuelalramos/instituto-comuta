@@ -2,7 +2,7 @@ import { createPixCharge, getPixStatus } from 'backend/pix.web';
 import wixLocationFrontend from 'wix-location-frontend';
 import wixWindowFrontend from 'wix-window-frontend';
 
-const DEFAULT_PAYER_EMAIL = 'doe@institutocomuta.org.br';
+const FIXED_PIX_KEY = 'doe@institutocomuta.org.br';
 
 /** @type {string | null} */
 let currentDonationId = null;
@@ -24,7 +24,7 @@ $w.onReady(function () {
 
   const copiarPixFixo = async () => {
     try {
-      await wixWindowFrontend.copyToClipboard(DEFAULT_PAYER_EMAIL);
+      await wixWindowFrontend.copyToClipboard(FIXED_PIX_KEY);
       setTextIfExists('#ajudaPix', 'Pix copiado');
     } catch (error) {
       console.log('Erro ao copiar Pix:', getErrorMessage(error));
@@ -174,9 +174,8 @@ async function gerarPix() {
     return;
   }
 
-  const amountRaw = String($w('#inputValor').value || '').trim();
-  const emailInput = String($w('#inputEmail').value || '').trim();
-  const email = emailInput || DEFAULT_PAYER_EMAIL;
+  const amountRaw = getNormalizedAmountInput();
+  const email = getNormalizedEmailInput();
   const amount = Number(amountRaw.replace(',', '.'));
 
   if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
@@ -186,7 +185,14 @@ async function gerarPix() {
     return;
   }
 
-  if (emailInput && (!email.includes('@') || !email.includes('.'))) {
+  if (!email) {
+    await $w('#inputEmail').scrollTo();
+    $w('#inputEmail').focus();
+    $w('#txtMensagem').text = 'Digite seu email para gerar o pagamento';
+    return;
+  }
+
+  if (!isValidEmail(email)) {
     await $w('#inputEmail').scrollTo();
     $w('#inputEmail').focus();
     $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
@@ -194,6 +200,7 @@ async function gerarPix() {
   }
 
   isGeneratingPix = true;
+  setGerarPixDisponivel(false);
   limparResultado();
   $w('#txtMensagem').text = 'Gerando QR Code...';
 
@@ -246,9 +253,7 @@ async function gerarPix() {
       showAndExpandIfExists('#txtExpiracao');
     }
 
-    $w('#txtMensagem').text = emailInput
-      ? 'Seu QR Code aparecera aqui'
-      : 'QR Code gerado com email padrao';
+    $w('#txtMensagem').text = 'QR Code gerado com sucesso';
 
     iniciarConsultaStatus();
   } catch (error) {
@@ -256,6 +261,7 @@ async function gerarPix() {
     $w('#txtMensagem').text = getErrorMessage(error) || 'Erro ao gerar PIX';
   } finally {
     isGeneratingPix = false;
+    setGerarPixDisponivel(true);
   }
 }
 
@@ -267,14 +273,22 @@ async function gerarPix() {
  * @returns {Promise<T>}
  */
 function comTimeout(promise, timeoutMs, mensagem) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(mensagem));
-      }, timeoutMs);
-    })
-  ]);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(mensagem));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function configurarCliqueNoCodigo() {
@@ -361,8 +375,15 @@ function configurarFallbackMobile() {
 function agendarGeracaoMobile() {
   limparGeracaoMobileAgendada();
 
-  const amountRaw = String($w('#inputValor').value || '').trim();
-  if (!amountRaw) {
+  const amountRaw = getNormalizedAmountInput();
+  const email = getNormalizedEmailInput();
+  const amount = Number(amountRaw.replace(',', '.'));
+
+  if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
+    return;
+  }
+
+  if (!email || !isValidEmail(email)) {
     return;
   }
 
@@ -383,6 +404,39 @@ function limparGeracaoMobileAgendada() {
 
 function isMobileFormFactor() {
   return String(wixWindowFrontend.formFactor || '').toLowerCase() === 'mobile';
+}
+
+/**
+ * @param {boolean} disponivel
+ */
+function setGerarPixDisponivel(disponivel) {
+  const botao = getOptionalElement('#btnGerarPix');
+  if (!botao) {
+    return;
+  }
+
+  if (disponivel && typeof botao.enable === 'function') {
+    botao.enable();
+  }
+
+  if (!disponivel && typeof botao.disable === 'function') {
+    botao.disable();
+  }
+}
+
+function getNormalizedAmountInput() {
+  return String($w('#inputValor').value || '').trim();
+}
+
+function getNormalizedEmailInput() {
+  return String($w('#inputEmail').value || '').trim().toLowerCase();
+}
+
+/**
+ * @param {string} email
+ */
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function iniciarConsultaStatus() {

@@ -3,8 +3,6 @@ import { getSecret } from 'wix-secrets-backend';
 import { fetch } from 'wix-fetch';
 import wixData from 'wix-data';
 
-const DEFAULT_PAYER_EMAIL = 'doe@institutocomuta.org.br';
-
 /**
  * @typedef {Object} PixApiResponse
  * @property {string | number=} id
@@ -103,14 +101,18 @@ async function syncPixDonation(pix) {
 
 export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, email }) => {
   const normalizedAmount = Number(amount);
-  const normalizedEmail = String(email || '').trim() || DEFAULT_PAYER_EMAIL;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
 
   if (!normalizedAmount || Number.isNaN(normalizedAmount) || normalizedAmount <= 0) {
     throw new Error('Valor invalido.');
   }
 
-  if (!normalizedEmail.includes('@')) {
+  if (!normalizedEmail) {
     throw new Error('Email obrigatorio.');
+  }
+
+  if (!isValidEmail(normalizedEmail)) {
+    throw new Error('Email invalido.');
   }
 
   const { token, apiUrl } = await getMercadoPagoConfig();
@@ -191,3 +193,11 @@ export const getPixStatus = webMethod(Permissions.Anyone, async (donationId) => 
     paidAt: raw?.date_approved || null
   };
 });
+
+/**
+ * @param {string} email
+ * @returns {boolean}
+ */
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
