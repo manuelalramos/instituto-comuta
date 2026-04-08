@@ -20,26 +20,25 @@ const MOBILE_AUTO_GENERATE_DELAY_MS = 1500;
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
-
-  $w('#ajudaPix').text = textoInicial;
+  setTextIfExists('#ajudaPix', textoInicial);
 
   const copiarPixFixo = async () => {
     try {
       await wixWindowFrontend.copyToClipboard(DEFAULT_PAYER_EMAIL);
-      $w('#ajudaPix').text = 'Pix copiado';
+      setTextIfExists('#ajudaPix', 'Pix copiado');
     } catch (error) {
       console.log('Erro ao copiar Pix:', getErrorMessage(error));
-      $w('#ajudaPix').text = 'Nao foi possivel copiar o Pix';
+      setTextIfExists('#ajudaPix', 'Nao foi possivel copiar o Pix');
     }
 
     setTimeout(() => {
-      $w('#ajudaPix').text = textoInicial;
+      setTextIfExists('#ajudaPix', textoInicial);
     }, 2000);
   };
 
-  registrarClique('#btnCopiarPix', copiarPixFixo);
-  registrarClique('#ajudaPix', copiarPixFixo);
-  registrarClique('#text2', copiarPixFixo);
+  registrarCliqueOpcional('#btnCopiarPix', copiarPixFixo);
+  registrarCliqueOpcional('#ajudaPix', copiarPixFixo);
+  registrarCliqueOpcional('#text2', copiarPixFixo);
 
   prepararTela();
   configurarBotoesDeValor();
@@ -60,34 +59,80 @@ function registrarClique(seletor, acao) {
   });
 }
 
+function registrarCliqueOpcional(seletor, acao) {
+  const elemento = getOptionalElement(seletor);
+  if (!elemento || typeof elemento.onClick !== 'function') {
+    return;
+  }
+
+  elemento.onClick(() => {
+    return acao();
+  });
+}
+
+function getOptionalElement(seletor) {
+  try {
+    return $w(seletor);
+  } catch (error) {
+    console.log(`Elemento indisponivel no layout atual: ${seletor}`, getErrorMessage(error));
+    return null;
+  }
+}
+
+function setTextIfExists(seletor, texto) {
+  const elemento = getOptionalElement(seletor);
+  if (elemento && 'text' in elemento) {
+    elemento.text = texto;
+  }
+}
+
+function hideAndCollapseIfExists(seletor) {
+  const elemento = getOptionalElement(seletor);
+  if (!elemento) {
+    return;
+  }
+
+  if (typeof elemento.hide === 'function') {
+    elemento.hide();
+  }
+
+  if (typeof elemento.collapse === 'function') {
+    elemento.collapse();
+  }
+}
+
+function showAndExpandIfExists(seletor) {
+  const elemento = getOptionalElement(seletor);
+  if (!elemento) {
+    return;
+  }
+
+  if (typeof elemento.expand === 'function') {
+    elemento.expand();
+  }
+
+  if (typeof elemento.show === 'function') {
+    elemento.show();
+  }
+}
+
 function prepararTela() {
   $w('#inputValor').value = '';
   $w('#inputEmail').value = '';
 
   $w('#txtMensagem').text = 'Seu QR Code aparecera aqui';
-  $w('#txtPix').text = '';
-  $w('#txtStatus').text = '';
-  $w('#txtExpiracao').text = '';
-  $w('#txtAjuda').text = '';
-  $w('#txtLinkPix').text = '';
+  setTextIfExists('#txtPix', '');
+  setTextIfExists('#txtStatus', '');
+  setTextIfExists('#txtExpiracao', '');
+  setTextIfExists('#txtAjuda', '');
+  setTextIfExists('#txtLinkPix', '');
 
-  $w('#imgQr').hide();
-  $w('#imgQr').collapse();
-
-  $w('#txtPix').hide();
-  $w('#txtPix').collapse();
-
-  $w('#txtAjuda').hide();
-  $w('#txtAjuda').collapse();
-
-  $w('#txtStatus').hide();
-  $w('#txtStatus').collapse();
-
-  $w('#txtExpiracao').hide();
-  $w('#txtExpiracao').collapse();
-
-  $w('#txtLinkPix').hide();
-  $w('#txtLinkPix').collapse();
+  hideAndCollapseIfExists('#imgQr');
+  hideAndCollapseIfExists('#txtPix');
+  hideAndCollapseIfExists('#txtAjuda');
+  hideAndCollapseIfExists('#txtStatus');
+  hideAndCollapseIfExists('#txtExpiracao');
+  hideAndCollapseIfExists('#txtLinkPix');
 }
 
 function configurarBotoesDeValor() {
@@ -164,44 +209,41 @@ async function gerarPix() {
     currentTicketUrl = result.ticketUrl || '';
 
     if (result.qrCodeImage) {
-      $w('#imgQr').src = result.qrCodeImage;
-      $w('#imgQr').expand();
-      $w('#imgQr').show();
+      const imgQr = getOptionalElement('#imgQr');
+      if (imgQr && 'src' in imgQr) {
+        imgQr.src = result.qrCodeImage;
+      }
+      showAndExpandIfExists('#imgQr');
     }
 
     if (currentTicketUrl) {
-      $w('#txtPix').text = '';
-      $w('#txtPix').hide();
-      $w('#txtPix').collapse();
+      setTextIfExists('#txtPix', '');
+      hideAndCollapseIfExists('#txtPix');
 
-      $w('#txtLinkPix').text = 'Abrir pagamento no Mercado Pago';
-      $w('#txtLinkPix').expand();
-      $w('#txtLinkPix').show();
+      setTextIfExists('#txtLinkPix', 'Abrir pagamento no Mercado Pago');
+      showAndExpandIfExists('#txtLinkPix');
 
-      $w('#txtAjuda').text = 'Toque no link do Mercado Pago ou leia o QR Code';
-      $w('#txtAjuda').expand();
-      $w('#txtAjuda').show();
+      setTextIfExists('#txtAjuda', 'Toque no link do Mercado Pago ou leia o QR Code');
+      showAndExpandIfExists('#txtAjuda');
     } else if (currentPixCode) {
-      $w('#txtPix').text = currentPixCode;
-      $w('#txtPix').expand();
-      $w('#txtPix').show();
+      setTextIfExists('#txtPix', currentPixCode);
+      showAndExpandIfExists('#txtPix');
 
-      $w('#txtAjuda').text = 'Clique no codigo para copiar ou leia o QR Code';
-      $w('#txtAjuda').expand();
-      $w('#txtAjuda').show();
+      setTextIfExists('#txtAjuda', 'Clique no codigo para copiar ou leia o QR Code');
+      showAndExpandIfExists('#txtAjuda');
     }
 
     if (result.status) {
-      $w('#txtStatus').text = 'Status: ' + traduzirStatus(result.status);
-      $w('#txtStatus').expand();
-      $w('#txtStatus').show();
+      setTextIfExists('#txtStatus', 'Status: ' + traduzirStatus(result.status));
+      showAndExpandIfExists('#txtStatus');
     }
 
     if (result.expiresAt) {
-      $w('#txtExpiracao').text =
-        'Expira em: ' + new Date(result.expiresAt).toLocaleString('pt-BR');
-      $w('#txtExpiracao').expand();
-      $w('#txtExpiracao').show();
+      setTextIfExists(
+        '#txtExpiracao',
+        'Expira em: ' + new Date(result.expiresAt).toLocaleString('pt-BR')
+      );
+      showAndExpandIfExists('#txtExpiracao');
     }
 
     $w('#txtMensagem').text = emailInput
@@ -236,11 +278,11 @@ function comTimeout(promise, timeoutMs, mensagem) {
 }
 
 function configurarCliqueNoCodigo() {
-  registrarClique('#txtPix', async () => {
+  registrarCliqueOpcional('#txtPix', async () => {
     await copiarCodigoPix();
   });
 
-  registrarClique('#txtLinkPix', () => {
+  registrarCliqueOpcional('#txtLinkPix', () => {
     abrirLinkPix();
   });
 }
@@ -250,14 +292,13 @@ async function copiarCodigoPix() {
 
   try {
     await wixWindowFrontend.copyToClipboard(currentPixCode);
-    $w('#txtAjuda').text = 'Codigo copiado com sucesso.';
+    setTextIfExists('#txtAjuda', 'Codigo copiado com sucesso.');
   } catch (error) {
     console.log('Falha ao copiar:', getErrorMessage(error));
-    $w('#txtAjuda').text = 'Nao foi possivel copiar automaticamente.';
+    setTextIfExists('#txtAjuda', 'Nao foi possivel copiar automaticamente.');
   }
 
-  $w('#txtAjuda').expand();
-  $w('#txtAjuda').show();
+  showAndExpandIfExists('#txtAjuda');
 }
 
 function abrirLinkPix() {
@@ -277,28 +318,22 @@ function limparResultado() {
     pollTimer = null;
   }
 
-  $w('#imgQr').hide();
-  $w('#imgQr').collapse();
+  hideAndCollapseIfExists('#imgQr');
 
-  $w('#txtPix').text = '';
-  $w('#txtPix').hide();
-  $w('#txtPix').collapse();
+  setTextIfExists('#txtPix', '');
+  hideAndCollapseIfExists('#txtPix');
 
-  $w('#txtAjuda').text = '';
-  $w('#txtAjuda').hide();
-  $w('#txtAjuda').collapse();
+  setTextIfExists('#txtAjuda', '');
+  hideAndCollapseIfExists('#txtAjuda');
 
-  $w('#txtStatus').text = '';
-  $w('#txtStatus').hide();
-  $w('#txtStatus').collapse();
+  setTextIfExists('#txtStatus', '');
+  hideAndCollapseIfExists('#txtStatus');
 
-  $w('#txtExpiracao').text = '';
-  $w('#txtExpiracao').hide();
-  $w('#txtExpiracao').collapse();
+  setTextIfExists('#txtExpiracao', '');
+  hideAndCollapseIfExists('#txtExpiracao');
 
-  $w('#txtLinkPix').text = '';
-  $w('#txtLinkPix').hide();
-  $w('#txtLinkPix').collapse();
+  setTextIfExists('#txtLinkPix', '');
+  hideAndCollapseIfExists('#txtLinkPix');
 }
 
 function configurarFallbackMobile() {
@@ -362,9 +397,8 @@ function iniciarConsultaStatus() {
       const result = await getPixStatus(currentDonationId);
 
       if (result && result.status) {
-        $w('#txtStatus').text = 'Status: ' + traduzirStatus(result.status);
-        $w('#txtStatus').expand();
-        $w('#txtStatus').show();
+        setTextIfExists('#txtStatus', 'Status: ' + traduzirStatus(result.status));
+        showAndExpandIfExists('#txtStatus');
       }
     } catch (error) {
       console.log('Erro ao consultar status:', getErrorMessage(error));
