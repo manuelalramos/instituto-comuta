@@ -1,6 +1,7 @@
 import { webMethod, Permissions } from 'wix-web-module';
 import { getSecret } from 'wix-secrets-backend';
 import { fetch } from 'wix-fetch';
+import wixData from 'wix-data';
 
 const DEFAULT_PAYER_EMAIL = 'doe@institutocomuta.org.br';
 
@@ -60,6 +61,46 @@ function extractPixData(raw) {
   };
 }
 
+/**
+ * Mantem a colecao PixDonations em sincronia com o pagamento do Mercado Pago.
+ * @param {{
+ *   donationId: string,
+ *   status?: string,
+ *   expiresAt?: string | null
+ * }} pix
+ */
+async function syncPixDonation(pix) {
+  if (!pix?.donationId) {
+    return;
+  }
+
+  try {
+    const itemData = {
+      donationId: pix.donationId,
+      status: pix.status || 'pending',
+      title: `Doacao PIX ${pix.donationId}`,
+      expiresAt: pix.expiresAt || null
+    };
+
+    const existing = await wixData.query('PixDonations')
+      .eq('donationId', pix.donationId)
+      .limit(1)
+      .find();
+
+    if (existing.items.length > 0) {
+      await wixData.update('PixDonations', {
+        ...existing.items[0],
+        ...itemData
+      });
+      return;
+    }
+
+    await wixData.insert('PixDonations', itemData);
+  } catch (error) {
+    console.warn('PixDonations sync skipped:', error);
+  }
+}
+
 export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, email }) => {
   const normalizedAmount = Number(amount);
   const normalizedEmail = String(email || '').trim() || DEFAULT_PAYER_EMAIL;
@@ -104,6 +145,12 @@ export const createPixCharge = webMethod(Permissions.Anyone, async ({ amount, em
     throw new Error('Mercado Pago não retornou o ID do pagamento.');
   }
 
+  await syncPixDonation({
+    donationId: pix.donationId,
+    status: pix.status,
+    expiresAt: pix.expiresAt
+  });
+
   return pix;
 });
 
@@ -130,9 +177,17 @@ export const getPixStatus = webMethod(Permissions.Anyone, async (donationId) => 
     throw new Error(raw?.message || raw?.error || 'Erro ao consultar pagamento PIX.');
   }
 
+  const status = raw?.status || 'pending';
+
+  await syncPixDonation({
+    donationId: paymentId,
+    status,
+    expiresAt: raw?.date_of_expiration || null
+  });
+
   return {
     donationId: paymentId,
-    status: raw?.status || 'pending',
+    status,
     paidAt: raw?.date_approved || null
   };
 });
