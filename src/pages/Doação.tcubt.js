@@ -128,6 +128,7 @@ function prepararTela() {
   setTextIfExists('#txtLinkPix', '');
 
   hideAndCollapseIfExists('#imgQr');
+  hideAndCollapseIfExists('#imgQrMobile');
   hideAndCollapseIfExists('#txtPix');
   hideAndCollapseIfExists('#txtAjuda');
   hideAndCollapseIfExists('#txtStatus');
@@ -216,12 +217,18 @@ async function gerarPix() {
     currentTicketUrl = result.ticketUrl || '';
 
     if (result.qrCodeImage) {
-      const imgQr = getOptionalElement('#imgQr');
-      if (imgQr && 'src' in imgQr) {
-        imgQr.src = result.qrCodeImage;
-      }
-      showAndExpandIfExists('#imgQr');
-    }
+  const imgQr = getOptionalElement('#imgQr');
+  if (imgQr && 'src' in imgQr) {
+    imgQr.src = result.qrCodeImage;
+  }
+  showAndExpandIfExists('#imgQr');
+
+  const imgQrMobile = getOptionalElement('#imgQrMobile');
+  if (imgQrMobile && 'src' in imgQrMobile) {
+    imgQrMobile.src = result.qrCodeImage;
+  }
+  showAndExpandIfExists('#imgQrMobile');
+}
 
     if (currentTicketUrl) {
       setTextIfExists('#txtPix', '');
@@ -333,6 +340,7 @@ function limparResultado() {
   }
 
   hideAndCollapseIfExists('#imgQr');
+  hideAndCollapseIfExists('#imgQrMobile');
 
   setTextIfExists('#txtPix', '');
   hideAndCollapseIfExists('#txtPix');
