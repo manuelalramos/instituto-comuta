@@ -733,6 +733,14 @@ function validarFormularioCartao() {
     }
   }
 
+  if (!cardSelectedRecurrence) {
+    return { ok: false, elementId: '', message: 'Selecione a frequÃªncia da doaÃ§Ã£o.' };
+  }
+
+  if (obterValorSelecionadoCartao() <= 0) {
+    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor vÃ¡lido para a doaÃ§Ã£o.' };
+  }
+
   const cardEmailSelector = getCardEmailSelector();
   const cardEmail = getInputValueIfExists(cardEmailSelector);
 
@@ -924,11 +932,18 @@ function getInputValueIfExists(selector) {
 }
 
 function getCardEmailSelector() {
-  return getFirstExistingSelector(CARD_EMAIL_PRIMARY_SELECTORS) || '#inputEmail';
+  return (
+    getFirstFilledSelector([...CARD_EMAIL_PRIMARY_SELECTORS, '#inputEmail']) ||
+    getFirstExistingSelector(CARD_EMAIL_PRIMARY_SELECTORS) ||
+    '#inputEmail'
+  );
 }
 
 function getCardEmailConfirmSelector() {
-  return getFirstExistingSelector(CARD_EMAIL_CONFIRM_SELECTORS);
+  return (
+    getFirstFilledSelector(CARD_EMAIL_CONFIRM_SELECTORS) ||
+    getFirstExistingSelector(CARD_EMAIL_CONFIRM_SELECTORS)
+  );
 }
 
 /**
@@ -937,6 +952,19 @@ function getCardEmailConfirmSelector() {
 function getFirstExistingSelector(selectors) {
   for (const selector of selectors) {
     if (getOptionalElement(selector)) {
+      return selector;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * @param {string[]} selectors
+ */
+function getFirstFilledSelector(selectors) {
+  for (const selector of selectors) {
+    if (normalizeStringCard(getInputValueIfExists(selector))) {
       return selector;
     }
   }
