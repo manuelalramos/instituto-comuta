@@ -19,6 +19,8 @@ const CARD_AMOUNT_PRESETS = {
 };
 const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inputEmailCard'];
 const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
+const CARD_MESSAGE_SELECTORS = ['#txtCardMessage', '#text6'];
+const CARD_SUMMARY_SELECTORS = ['#txtSubscriptionSummary'];
 
 /** @type {string | null} */
 let currentDonationId = null;
@@ -489,8 +491,8 @@ function configurarCheckoutCartao() {
 }
 
 function prepararCheckoutCartao() {
-  setTextIfExists('#txtCardMessage', 'Preencha os dados para continuar no Mercado Pago.');
-  setTextIfExists('#txtSubscriptionSummary', 'Escolha a frequencia e o valor para continuar.');
+  setCardMessage('Preencha os dados para continuar no Mercado Pago.');
+  setCardSummary('Escolha a frequência e o valor para continuar.');
   hideAndCollapseIfExists('#loadingStrip');
 }
 
@@ -509,6 +511,7 @@ function memorizarLabelsOriginaisCartao() {
 }
 
 function configurarBotoesFrequenciaCartao() {
+  habilitarBotoesCartao(Object.values(CARD_FREQUENCY_BUTTONS));
   registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.one_time, () => selecionarFrequenciaCartao('one_time'));
   registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.weekly, () => selecionarFrequenciaCartao('weekly'));
   registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.monthly, () => selecionarFrequenciaCartao('monthly'));
@@ -516,6 +519,7 @@ function configurarBotoesFrequenciaCartao() {
 }
 
 function configurarBotoesValorCartao() {
+  habilitarBotoesCartao(Object.keys(CARD_AMOUNT_PRESETS));
   Object.entries(CARD_AMOUNT_PRESETS).forEach(([buttonId, config]) => {
     registrarCliqueOpcional(buttonId, () => selecionarValorPresetCartao(config.amount, config.presetCode));
   });
@@ -598,6 +602,7 @@ function configurarBuscaCepCartao() {
 }
 
 function configurarBotaoCheckoutCartao() {
+  habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     await criarCheckoutCartaoHospedado();
   });
@@ -645,7 +650,7 @@ async function buscarEnderecoPorCepCartao() {
   }
 
   try {
-    setTextIfExists('#txtCardMessage', 'Buscando endereco pelo CEP...');
+    setCardMessage('Buscando endereco pelo CEP...');
     const address = await lookupAddressByCep(cep);
 
     preencherInputSeVazio('#inputStreet', address.street);
@@ -654,9 +659,9 @@ async function buscarEnderecoPorCepCartao() {
     preencherInputSeVazio('#inputState', address.state);
     preencherInputSeVazio('#inputComplement', address.complement);
 
-    setTextIfExists('#txtCardMessage', 'Endereco preenchido automaticamente. Confira os dados.');
+    setCardMessage('Endereco preenchido automaticamente. Confira os dados.');
   } catch (error) {
-    setTextIfExists('#txtCardMessage', getErrorMessage(error) || 'Nao foi possivel localizar o CEP.');
+    setCardMessage(getErrorMessage(error) || 'Nao foi possivel localizar o CEP.');
   }
 }
 
@@ -667,7 +672,7 @@ async function criarCheckoutCartaoHospedado() {
 
   const validation = validarFormularioCartao();
   if (!validation.ok) {
-    setTextIfExists('#txtCardMessage', validation.message);
+    setCardMessage(validation.message);
 
     if (validation.elementId) {
       await focarElementoOpcional(validation.elementId);
@@ -678,7 +683,7 @@ async function criarCheckoutCartaoHospedado() {
   isCreatingCardCheckout = true;
   setCheckoutCartaoDisponivel(false);
   showAndExpandIfExists('#loadingStrip');
-  setTextIfExists('#txtCardMessage', 'Redirecionando para o Mercado Pago...');
+  setCardMessage('Te direcionando para o Mercado Pago...');
 
   try {
     const payload = coletarPayloadCheckoutCartao();
@@ -690,7 +695,7 @@ async function criarCheckoutCartaoHospedado() {
 
     wixLocationFrontend.to(result.checkoutUrl);
   } catch (error) {
-    setTextIfExists('#txtCardMessage', getErrorMessage(error) || 'Nao foi possivel criar o checkout.');
+    setCardMessage(getErrorMessage(error) || 'Nao foi possivel criar o checkout.');
   } finally {
     isCreatingCardCheckout = false;
     setCheckoutCartaoDisponivel(true);
@@ -723,11 +728,11 @@ function validarFormularioCartao() {
   const cardEmail = getInputValueIfExists(cardEmailSelector);
 
   if (!normalizeStringCard(cardEmail)) {
-    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email valido.' };
+    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email válido.' };
   }
 
   if (!isValidEmail(cardEmail)) {
-    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email valido.' };
+    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email válido.' };
   }
 
   const emailConfirm = getOptionalElement(getCardEmailConfirmSelector());
@@ -743,11 +748,11 @@ function validarFormularioCartao() {
   }
 
   if (!isValidCpfCard(getInputValueIfExists('#inputCpf'))) {
-    return { ok: false, elementId: '#inputCpf', message: 'Informe um CPF valido.' };
+    return { ok: false, elementId: '#inputCpf', message: 'Informe um CPF válido.' };
   }
 
   if (!/^\d{8}$/.test(normalizeZipCodeBrazil(getInputValueIfExists('#inputZipCode')))) {
-    return { ok: false, elementId: '#inputZipCode', message: 'Informe um CEP valido.' };
+    return { ok: false, elementId: '#inputZipCode', message: 'Informe um CEP válido.' };
   }
 
   if (!/^[A-Z]{2}$/.test(formatarEstado(getInputValueIfExists('#inputState')))) {
@@ -755,11 +760,11 @@ function validarFormularioCartao() {
   }
 
   if (!cardSelectedRecurrence) {
-    return { ok: false, elementId: '', message: 'Selecione a frequencia da doacao.' };
+    return { ok: false, elementId: '', message: 'Selecione a frequência da doação.' };
   }
 
   if (obterValorSelecionadoCartao() <= 0) {
-    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor valido para a doacao.' };
+    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor válido para a doação.' };
   }
 
   const checkboxTerms = getOptionalElement('#checkboxTerms');
@@ -797,28 +802,28 @@ function coletarPayloadCheckoutCartao() {
 function atualizarResumoCartao() {
   const amount = obterValorSelecionadoCartao();
   if (!cardSelectedRecurrence || amount <= 0) {
-    setTextIfExists('#txtSubscriptionSummary', 'Escolha a frequencia e o valor para continuar.');
+    setCardSummary('Escolha a frequência e o valor para continuar.');
     return;
   }
 
   const formattedAmount = formatCurrency(amount);
 
   if (cardSelectedRecurrence === 'one_time') {
-    setTextIfExists('#txtSubscriptionSummary', `Voce vai fazer uma doacao unica de ${formattedAmount}.`);
+    setCardSummary(`Você vai fazer uma doação única de ${formattedAmount}.`);
     return;
   }
 
   if (cardSelectedRecurrence === 'weekly') {
-    setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por semana ate cancelar.`);
+    setCardSummary(`Você vai doar ${formattedAmount} por semana até cancelar.`);
     return;
   }
 
   if (cardSelectedRecurrence === 'yearly') {
-    setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por ano ate cancelar.`);
+    setCardSummary(`Você vai doar ${formattedAmount} por ano até cancelar.`);
     return;
   }
 
-  setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por mes ate cancelar.`);
+  setCardSummary(`Você vai doar ${formattedAmount} por mês até cancelar.`);
 }
 
 function atualizarBotoesFrequenciaCartao() {
@@ -971,6 +976,40 @@ function setCheckoutCartaoDisponivel(available) {
   }
 }
 
+function setCardMessage(text) {
+  setFirstExistingText(CARD_MESSAGE_SELECTORS, text);
+}
+
+function setCardSummary(text) {
+  setFirstExistingText(CARD_SUMMARY_SELECTORS, text);
+}
+
+/**
+ * @param {string[]} selectors
+ * @param {string} text
+ */
+function setFirstExistingText(selectors, text) {
+  for (const selector of selectors) {
+    const element = getOptionalElement(selector);
+    if (element && 'text' in element) {
+      element.text = text;
+      return;
+    }
+  }
+}
+
+/**
+ * @param {string[]} selectors
+ */
+function habilitarBotoesCartao(selectors) {
+  selectors.forEach((selector) => {
+    const button = getOptionalElement(selector);
+    if (button && typeof button.enable === 'function') {
+      button.enable();
+    }
+  });
+}
+
 /**
  * @param {unknown} value
  */
@@ -1074,7 +1113,7 @@ function formatarValorDigitadoCartao(value) {
  * @param {number} amount
  */
 function formatarValorPresetInputCartao(amount) {
-  return amount.toFixed(2).replace('.', ',');
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2).replace('.', ',');
 }
 
 /**
@@ -1160,10 +1199,10 @@ function getErrorMessage(error) {
  * @param {string} status
  */
 function traduzirStatus(status) {
-  if (status === 'approved') return 'pago';
-  if (status === 'pending') return 'aguardando pagamento';
-  if (status === 'in_process') return 'em processamento';
-  if (status === 'rejected') return 'rejeitado';
-  if (status === 'cancelled') return 'cancelado';
+  if (status === 'approved') return 'Pago';
+  if (status === 'pending') return 'Aguardando pagamento';
+  if (status === 'in_process') return 'Em processamento';
+  if (status === 'rejected') return 'Rejeitado';
+  if (status === 'cancelled') return 'Cancelado';
   return status;
 }
