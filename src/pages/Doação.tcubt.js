@@ -17,6 +17,8 @@ const CARD_AMOUNT_PRESETS = {
   '#btnAmount20': { amount: 20, presetCode: 'amount_20' },
   '#btnAmount50': { amount: 50, presetCode: 'amount_50' }
 };
+const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inputEmailCard'];
+const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
 
 /** @type {string | null} */
 let currentDonationId = null;
@@ -700,7 +702,6 @@ function validarFormularioCartao() {
   const requiredFields = [
     ['#inputFirstName', 'Informe o nome.'],
     ['#inputLastName', 'Informe o sobrenome.'],
-    ['#inputEmail', 'Informe um email valido.'],
     ['#inputPhone', 'Informe um celular com DDD.'],
     ['#inputCpf', 'Informe um CPF valido.'],
     ['#inputZipCode', 'Informe um CEP valido.'],
@@ -718,15 +719,22 @@ function validarFormularioCartao() {
     }
   }
 
-  if (!isValidEmail(getInputValueIfExists('#inputEmail'))) {
-    return { ok: false, elementId: '#inputEmail', message: 'Informe um email valido.' };
+  const cardEmailSelector = getCardEmailSelector();
+  const cardEmail = getInputValueIfExists(cardEmailSelector);
+
+  if (!normalizeStringCard(cardEmail)) {
+    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email valido.' };
   }
 
-  const emailConfirm = getOptionalElement('#inputEmailConfirm');
+  if (!isValidEmail(cardEmail)) {
+    return { ok: false, elementId: cardEmailSelector, message: 'Informe um email valido.' };
+  }
+
+  const emailConfirm = getOptionalElement(getCardEmailConfirmSelector());
   if (emailConfirm && 'value' in emailConfirm) {
     const confirmValue = normalizeStringCard(emailConfirm.value);
-    if (confirmValue && confirmValue !== normalizeStringCard(getInputValueIfExists('#inputEmail'))) {
-      return { ok: false, elementId: '#inputEmailConfirm', message: 'Os emails precisam ser iguais.' };
+    if (confirmValue && confirmValue !== normalizeStringCard(cardEmail)) {
+      return { ok: false, elementId: getCardEmailConfirmSelector(), message: 'Os emails precisam ser iguais.' };
     }
   }
 
@@ -763,10 +771,12 @@ function validarFormularioCartao() {
 }
 
 function coletarPayloadCheckoutCartao() {
+  const cardEmailSelector = getCardEmailSelector();
+
   return {
     firstName: normalizeStringCard(getInputValueIfExists('#inputFirstName')),
     lastName: normalizeStringCard(getInputValueIfExists('#inputLastName')),
-    email: normalizeStringCard(getInputValueIfExists('#inputEmail')).toLowerCase(),
+    email: normalizeStringCard(getInputValueIfExists(cardEmailSelector)).toLowerCase(),
     phone: normalizePhoneBrazil(getInputValueIfExists('#inputPhone')),
     cpf: normalizeCpfCard(getInputValueIfExists('#inputCpf')),
     amount: obterValorSelecionadoCartao(),
@@ -881,8 +891,33 @@ function configurarMascaraInput(selector, formatter) {
  * @param {string} selector
  */
 function getInputValueIfExists(selector) {
+  if (!selector) {
+    return '';
+  }
+
   const input = getOptionalElement(selector);
   return input && 'value' in input ? String(input.value || '') : '';
+}
+
+function getCardEmailSelector() {
+  return getFirstExistingSelector(CARD_EMAIL_PRIMARY_SELECTORS) || '#inputEmail';
+}
+
+function getCardEmailConfirmSelector() {
+  return getFirstExistingSelector(CARD_EMAIL_CONFIRM_SELECTORS);
+}
+
+/**
+ * @param {string[]} selectors
+ */
+function getFirstExistingSelector(selectors) {
+  for (const selector of selectors) {
+    if (getOptionalElement(selector)) {
+      return selector;
+    }
+  }
+
+  return '';
 }
 
 /**
