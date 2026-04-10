@@ -1134,25 +1134,17 @@ function abrirCheckoutCartao(checkoutUrl) {
 
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = setTimeout(() => {
-    tentarAbrirCheckoutCartaoNoNavegador(url);
+    finalizarFallbackCheckoutCartao(url);
   }, 120);
 }
 
 /**
  * @param {string} checkoutUrl
  */
-function tentarAbrirCheckoutCartaoNoNavegador(checkoutUrl) {
+function finalizarFallbackCheckoutCartao(checkoutUrl) {
   const url = normalizeStringCard(checkoutUrl);
   if (!url) {
     return;
-  }
-
-  try {
-    if (globalThis?.location && typeof globalThis.location.assign === 'function') {
-      globalThis.location.assign(url);
-    }
-  } catch (error) {
-    console.log('Falha ao redirecionar com location.assign:', getErrorMessage(error));
   }
 
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
