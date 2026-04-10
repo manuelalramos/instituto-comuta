@@ -482,7 +482,7 @@ function buildRecurringDonationFromSubscription(raw) {
     frequency: Number(autoRecurring?.frequency || 0),
     frequencyType: normalizeString(autoRecurring?.frequency_type),
     status: normalizeString(raw?.status) || 'pending',
-    checkoutUrl: normalizeString(raw?.init_point),
+    checkoutUrl: normalizeString(raw?.init_point || raw?.sandbox_init_point),
     nextPaymentDate: parseOptionalDate(raw?.next_payment_date),
     dateCreatedMp: parseOptionalDate(raw?.date_created),
     lastModifiedMp: parseOptionalDate(raw?.last_modified),

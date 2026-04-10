@@ -47,6 +47,8 @@ let cepLookupTimer = null;
 let isCreatingCardCheckout = false;
 /** @type {boolean} */
 let isUpdatingCardAmountInput = false;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let cardCheckoutFeedbackTimer = null;
 const cardOriginalButtonLabels = new Map();
 
 $w.onReady(function () {
@@ -493,13 +495,15 @@ function configurarCheckoutCartao() {
 function prepararCheckoutCartao() {
   setCardMessage('Preencha os dados para continuar no Mercado Pago.');
   setCardSummary('Escolha a frequência e o valor para continuar.');
+  restaurarLabelBotaoCheckoutCartao();
   hideAndCollapseIfExists('#loadingStrip');
 }
 
 function memorizarLabelsOriginaisCartao() {
   const buttonIds = [
     ...Object.values(CARD_FREQUENCY_BUTTONS),
-    ...Object.keys(CARD_AMOUNT_PRESETS)
+    ...Object.keys(CARD_AMOUNT_PRESETS),
+    '#btnContinueToMercadoPago'
   ];
 
   buttonIds.forEach((buttonId) => {
@@ -665,6 +669,8 @@ async function criarCheckoutCartaoHospedado() {
     return;
   }
 
+  let isRedirectingToMercadoPago = false;
+
   const validation = validarFormularioCartao();
   if (!validation.ok) {
     setCardMessage(validation.message);
@@ -679,22 +685,30 @@ async function criarCheckoutCartaoHospedado() {
   setCheckoutCartaoDisponivel(false);
   showAndExpandIfExists('#loadingStrip');
   setCardMessage('Te direcionando para o Mercado Pago...');
+  definirLabelBotaoCheckoutCartao('Abrindo Mercado Pago...');
 
   try {
     const payload = coletarPayloadCheckoutCartao();
     const result = await createHostedDonationCheckout(payload);
+    const checkoutUrl = normalizeStringCard(result?.checkoutUrl);
 
-    if (!result?.checkoutUrl) {
+    if (!checkoutUrl) {
       throw new Error('O Mercado Pago nao retornou a URL do checkout.');
     }
 
-    wixLocationFrontend.to(result.checkoutUrl);
+    await esperarCheckoutCartao(150);
+    isRedirectingToMercadoPago = true;
+    wixLocationFrontend.to(checkoutUrl);
   } catch (error) {
-    setCardMessage(getErrorMessage(error) || 'Nao foi possivel criar o checkout.');
+    setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
+    flashLabelBotaoCheckoutCartao(getFriendlyCardCheckoutButtonLabel(error));
   } finally {
     isCreatingCardCheckout = false;
-    setCheckoutCartaoDisponivel(true);
-    hideAndCollapseIfExists('#loadingStrip');
+    if (!isRedirectingToMercadoPago) {
+      setCheckoutCartaoDisponivel(true);
+      hideAndCollapseIfExists('#loadingStrip');
+      restaurarLabelBotaoCheckoutCartao();
+    }
   }
 }
 
@@ -750,6 +764,10 @@ function validarFormularioCartao() {
     return { ok: false, elementId: '#inputZipCode', message: 'Informe um CEP válido.' };
   }
 
+  if (!normalizeStringCard(getStreetValueCartao())) {
+    return { ok: false, elementId: '#inputStreet', message: 'Informe o endereco.' };
+  }
+
   if (!/^[A-Z]{2}$/.test(formatarEstado(getInputValueIfExists('#inputState')))) {
     return { ok: false, elementId: '#inputState', message: 'Informe o estado com a UF.' };
   }
@@ -772,6 +790,8 @@ function validarFormularioCartao() {
 
 function coletarPayloadCheckoutCartao() {
   const cardEmailSelector = getCardEmailSelector();
+  const street = getStreetValueCartao();
+  const streetNumber = normalizeStringCard(getInputValueIfExists('#inputStreetNumber')) || getStreetNumberFromAddressCartao();
 
   return {
     firstName: normalizeStringCard(getInputValueIfExists('#inputFirstName')),
@@ -784,8 +804,8 @@ function coletarPayloadCheckoutCartao() {
     presetCode: cardSelectedPresetCode,
     recurrence: cardSelectedRecurrence,
     zipCode: normalizeZipCodeBrazil(getInputValueIfExists('#inputZipCode')),
-    street: normalizeStringCard(getInputValueIfExists('#inputStreet')),
-    streetNumber: normalizeStringCard(getInputValueIfExists('#inputStreetNumber')),
+    street,
+    streetNumber,
     complement: normalizeStringCard(getInputValueIfExists('#inputComplement')),
     neighborhood: normalizeStringCard(getInputValueIfExists('#inputNeighborhood')),
     city: normalizeStringCard(getInputValueIfExists('#inputCity')),
@@ -896,7 +916,11 @@ function getInputValueIfExists(selector) {
   }
 
   const input = getOptionalElement(selector);
-  return input && 'value' in input ? String(input.value || '') : '';
+  if (!input || !('value' in input)) {
+    return '';
+  }
+
+  return normalizeInputValue(input.value);
 }
 
 function getCardEmailSelector() {
@@ -930,7 +954,17 @@ function preencherInputSeVazio(selector, value) {
     return;
   }
 
-  if (!normalizeStringCard(input.value)) {
+  if (!normalizeStringCard(normalizeInputValue(input.value))) {
+    if (selector === '#inputStreet') {
+      input.value = {
+        formatted: value,
+        streetAddress: {
+          name: value
+        }
+      };
+      return;
+    }
+
     input.value = value;
   }
 }
@@ -999,7 +1033,10 @@ function setCheckoutCartaoDisponivel(available) {
 }
 
 function setCardMessage(text) {
-  setFirstExistingText(CARD_MESSAGE_SELECTORS, text);
+  const wroteMessage = setFirstExistingText(CARD_MESSAGE_SELECTORS, text);
+  if (!wroteMessage && normalizeStringCard(text)) {
+    flashLabelBotaoCheckoutCartao(getCardCheckoutFallbackLabel(text));
+  }
 }
 
 function setCardSummary(text) {
@@ -1015,9 +1052,11 @@ function setFirstExistingText(selectors, text) {
     const element = getOptionalElement(selector);
     if (element && 'text' in element) {
       element.text = text;
-      return;
+      return true;
     }
   }
+
+  return false;
 }
 
 /**
@@ -1037,6 +1076,77 @@ function habilitarBotoesCartao(selectors) {
  */
 function normalizeStringCard(value) {
   return String(value || '').trim();
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizeInputValue(value) {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value || '');
+  }
+
+  if (value && typeof value === 'object') {
+    return getAddressFormattedValue(value);
+  }
+
+  return '';
+}
+
+function getStreetValueCartao() {
+  const input = getOptionalElement('#inputStreet');
+  if (!input || !('value' in input)) {
+    return '';
+  }
+
+  const value = input.value;
+
+  if (value && typeof value === 'object') {
+    return normalizeStringCard(
+      value?.streetAddress?.name ||
+      value?.formatted ||
+      ''
+    );
+  }
+
+  return normalizeStringCard(value);
+}
+
+function getStreetNumberFromAddressCartao() {
+  const input = getOptionalElement('#inputStreet');
+  if (!input || !('value' in input)) {
+    return '';
+  }
+
+  const value = input.value;
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  return normalizeStringCard(value?.streetAddress?.number || '');
+}
+
+/**
+ * @param {unknown} value
+ */
+function getAddressFormattedValue(value) {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  const formatted = normalizeStringCard(value?.formatted || '');
+  if (formatted) {
+    return formatted;
+  }
+
+  const streetName = normalizeStringCard(value?.streetAddress?.name || '');
+  const streetNumber = normalizeStringCard(value?.streetAddress?.number || '');
+
+  if (streetName && streetNumber) {
+    return `${streetName}, ${streetNumber}`;
+  }
+
+  return streetName;
 }
 
 /**
@@ -1146,6 +1256,137 @@ function formatCurrency(amount) {
     style: 'currency',
     currency: 'BRL'
   });
+}
+
+/**
+ * @param {number} ms
+ */
+function esperarCheckoutCartao(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * @param {unknown} error
+ */
+function getFriendlyCardCheckoutErrorMessage(error) {
+  const message = getErrorMessage(error) || 'Nao foi possivel criar o checkout.';
+
+  if (message.includes('MP_SUBSCRIPTIONS_BACK_URL')) {
+    return 'Falta configurar a URL de retorno do Mercado Pago no painel do Wix.';
+  }
+
+  if (message.includes('MP_ACCESS_TOKEN')) {
+    return 'Falta configurar o token do Mercado Pago no painel do Wix.';
+  }
+
+  if (message.includes('Mercado Pago nao retornou a URL do checkout')) {
+    return 'O Mercado Pago nao devolveu o link de pagamento. Confira as credenciais e o modo de teste.';
+  }
+
+  return message;
+}
+
+/**
+ * @param {unknown} error
+ */
+function getFriendlyCardCheckoutButtonLabel(error) {
+  return getCardCheckoutFallbackLabel(getFriendlyCardCheckoutErrorMessage(error));
+}
+
+/**
+ * @param {string} text
+ */
+function getCardCheckoutFallbackLabel(text) {
+  const message = normalizeStringCard(text).toLowerCase();
+
+  if (!message) {
+    return getCheckoutCartaoOriginalLabel();
+  }
+
+  if (message.includes('preencha os dados')) {
+    return getCheckoutCartaoOriginalLabel();
+  }
+
+  if (message.includes('te direcionando') || message.includes('abrindo mercado pago')) {
+    return 'Abrindo Mercado Pago...';
+  }
+
+  if (message.includes('email')) {
+    return 'Revise o email';
+  }
+
+  if (message.includes('cpf')) {
+    return 'Revise o CPF';
+  }
+
+  if (message.includes('celular')) {
+    return 'Revise o celular';
+  }
+
+  if (message.includes('cep')) {
+    return 'Revise o CEP';
+  }
+
+  if (message.includes('valor')) {
+    return 'Informe o valor';
+  }
+
+  if (message.includes('frequ')) {
+    return 'Escolha a frequencia';
+  }
+
+  if (message.includes('termos')) {
+    return 'Aceite os termos';
+  }
+
+  return 'Tente novamente';
+}
+
+function getCheckoutCartaoOriginalLabel() {
+  return cardOriginalButtonLabels.get('#btnContinueToMercadoPago') || 'Continuar';
+}
+
+/**
+ * @param {string} label
+ */
+function definirLabelBotaoCheckoutCartao(label) {
+  limparTimerFeedbackBotaoCheckoutCartao();
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (button && 'label' in button) {
+    button.label = label;
+  }
+}
+
+function restaurarLabelBotaoCheckoutCartao() {
+  limparTimerFeedbackBotaoCheckoutCartao();
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (button && 'label' in button) {
+    button.label = getCheckoutCartaoOriginalLabel();
+  }
+}
+
+/**
+ * @param {string} label
+ */
+function flashLabelBotaoCheckoutCartao(label) {
+  definirLabelBotaoCheckoutCartao(label);
+  cardCheckoutFeedbackTimer = setTimeout(() => {
+    cardCheckoutFeedbackTimer = null;
+    if (!isCreatingCardCheckout) {
+      restaurarLabelBotaoCheckoutCartao();
+    }
+  }, 2400);
+}
+
+function limparTimerFeedbackBotaoCheckoutCartao() {
+  if (!cardCheckoutFeedbackTimer) {
+    return;
+  }
+
+  clearTimeout(cardCheckoutFeedbackTimer);
+  cardCheckoutFeedbackTimer = null;
 }
 
 /**
