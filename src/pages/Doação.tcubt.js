@@ -1,8 +1,22 @@
 import { createPixCharge, getPixStatus } from 'backend/pix.web';
+import { createHostedDonationCheckout } from 'backend/subscriptions.web';
+import { lookupAddressByCep } from 'backend/address.web';
 import wixLocationFrontend from 'wix-location-frontend';
 import wixWindowFrontend from 'wix-window-frontend';
 
 const FIXED_PIX_KEY = 'doe@institutocomuta.org.br';
+const CARD_FREQUENCY_BUTTONS = {
+  one_time: '#btnFrequencyOneTime',
+  weekly: '#btnFrequencyWeekly',
+  monthly: '#btnFrequencyMonthly',
+  yearly: '#btnFrequencyYearly'
+};
+const CARD_AMOUNT_PRESETS = {
+  '#btnAmount5': { amount: 5, presetCode: 'amount_5' },
+  '#btnAmount10': { amount: 10, presetCode: 'amount_10' },
+  '#btnAmount20': { amount: 20, presetCode: 'amount_20' },
+  '#btnAmount50': { amount: 50, presetCode: 'amount_50' }
+};
 
 /** @type {string | null} */
 let currentDonationId = null;
@@ -17,6 +31,17 @@ let isGeneratingPix = false;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let autoGenerateTimer = null;
 const MOBILE_AUTO_GENERATE_DELAY_MS = 1500;
+/** @type {'one_time' | 'weekly' | 'monthly' | 'yearly' | ''} */
+let cardSelectedRecurrence = '';
+/** @type {number | null} */
+let cardSelectedPresetAmount = null;
+/** @type {string} */
+let cardSelectedPresetCode = '';
+/** @type {ReturnType<typeof setTimeout> | null} */
+let cepLookupTimer = null;
+/** @type {boolean} */
+let isCreatingCardCheckout = false;
+const cardOriginalButtonLabels = new Map();
 
 $w.onReady(function () {
   const textoInicial = 'Clique acima para copiar o Pix';
@@ -45,6 +70,7 @@ $w.onReady(function () {
   configurarBotaoGerar();
   configurarCliqueNoCodigo();
   configurarFallbackMobile();
+  configurarCheckoutCartao();
 });
 
 /**
@@ -445,6 +471,590 @@ function getNormalizedEmailInput() {
  */
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function configurarCheckoutCartao() {
+  prepararCheckoutCartao();
+  memorizarLabelsOriginaisCartao();
+  configurarBotoesFrequenciaCartao();
+  configurarBotoesValorCartao();
+  configurarInputValorCartao();
+  configurarMascarasCartao();
+  configurarBuscaCepCartao();
+  configurarBotaoCheckoutCartao();
+}
+
+function prepararCheckoutCartao() {
+  setTextIfExists('#txtCardMessage', 'Preencha os dados para continuar no Mercado Pago.');
+  setTextIfExists('#txtSubscriptionSummary', 'Escolha a frequencia e o valor para continuar.');
+  hideAndCollapseIfExists('#loadingStrip');
+}
+
+function memorizarLabelsOriginaisCartao() {
+  const buttonIds = [
+    ...Object.values(CARD_FREQUENCY_BUTTONS),
+    ...Object.keys(CARD_AMOUNT_PRESETS)
+  ];
+
+  buttonIds.forEach((buttonId) => {
+    const button = getOptionalElement(buttonId);
+    if (button && 'label' in button) {
+      cardOriginalButtonLabels.set(buttonId, button.label);
+    }
+  });
+}
+
+function configurarBotoesFrequenciaCartao() {
+  registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.one_time, () => selecionarFrequenciaCartao('one_time'));
+  registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.weekly, () => selecionarFrequenciaCartao('weekly'));
+  registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.monthly, () => selecionarFrequenciaCartao('monthly'));
+  registrarCliqueOpcional(CARD_FREQUENCY_BUTTONS.yearly, () => selecionarFrequenciaCartao('yearly'));
+}
+
+function configurarBotoesValorCartao() {
+  Object.entries(CARD_AMOUNT_PRESETS).forEach(([buttonId, config]) => {
+    registrarCliqueOpcional(buttonId, () => selecionarValorPresetCartao(config.amount, config.presetCode));
+  });
+}
+
+function configurarInputValorCartao() {
+  const inputValor = getOptionalElement('#inputAmountCustom');
+  if (!inputValor || typeof inputValor.onInput !== 'function') {
+    return;
+  }
+
+  inputValor.onInput(() => {
+    inputValor.value = formatarValorDigitadoCartao(inputValor.value);
+
+    if (parseValorCartao(inputValor.value) > 0) {
+      cardSelectedPresetAmount = null;
+      cardSelectedPresetCode = '';
+      atualizarBotoesValorCartao();
+    }
+
+    atualizarResumoCartao();
+  });
+
+  if (typeof inputValor.onBlur === 'function') {
+    inputValor.onBlur(() => {
+      const amount = parseValorCartao(inputValor.value);
+      inputValor.value = amount > 0 ? formatCurrency(amount) : '';
+      atualizarResumoCartao();
+    });
+  }
+}
+
+function configurarMascarasCartao() {
+  configurarMascaraInput('#inputCpf', formatarCpf);
+  configurarMascaraInput('#inputPhone', formatarTelefoneBrasil);
+  configurarMascaraInput('#inputZipCode', formatarCep);
+
+  const estado = getOptionalElement('#inputState');
+  if (estado && typeof estado.onInput === 'function') {
+    estado.onInput(() => {
+      estado.value = formatarEstado(estado.value);
+    });
+  }
+}
+
+function configurarBuscaCepCartao() {
+  const cepInput = getOptionalElement('#inputZipCode');
+  if (!cepInput || typeof cepInput.onInput !== 'function') {
+    return;
+  }
+
+  const dispararBusca = () => {
+    limparBuscaCepAgendada();
+    const cep = normalizeZipCodeBrazil(cepInput.value);
+    if (!/^\d{8}$/.test(cep)) {
+      return;
+    }
+
+    cepLookupTimer = setTimeout(async () => {
+      cepLookupTimer = null;
+      await buscarEnderecoPorCepCartao();
+    }, 350);
+  };
+
+  cepInput.onInput(dispararBusca);
+
+  if (typeof cepInput.onBlur === 'function') {
+    cepInput.onBlur(() => {
+      void buscarEnderecoPorCepCartao();
+    });
+  }
+}
+
+function configurarBotaoCheckoutCartao() {
+  registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
+    await criarCheckoutCartaoHospedado();
+  });
+}
+
+/**
+ * @param {'one_time' | 'weekly' | 'monthly' | 'yearly'} recurrence
+ */
+function selecionarFrequenciaCartao(recurrence) {
+  cardSelectedRecurrence = recurrence;
+  atualizarBotoesFrequenciaCartao();
+  atualizarResumoCartao();
+}
+
+/**
+ * @param {number} amount
+ * @param {string} presetCode
+ */
+function selecionarValorPresetCartao(amount, presetCode) {
+  cardSelectedPresetAmount = amount;
+  cardSelectedPresetCode = presetCode;
+
+  const inputValor = getOptionalElement('#inputAmountCustom');
+  if (inputValor && 'value' in inputValor) {
+    inputValor.value = formatCurrency(amount);
+  }
+
+  atualizarBotoesValorCartao();
+  atualizarResumoCartao();
+}
+
+async function buscarEnderecoPorCepCartao() {
+  const cepInput = getOptionalElement('#inputZipCode');
+  if (!cepInput || !('value' in cepInput)) {
+    return;
+  }
+
+  const cep = normalizeZipCodeBrazil(cepInput.value);
+  if (!/^\d{8}$/.test(cep)) {
+    return;
+  }
+
+  try {
+    setTextIfExists('#txtCardMessage', 'Buscando endereco pelo CEP...');
+    const address = await lookupAddressByCep(cep);
+
+    preencherInputSeVazio('#inputStreet', address.street);
+    preencherInputSeVazio('#inputNeighborhood', address.neighborhood);
+    preencherInputSeVazio('#inputCity', address.city);
+    preencherInputSeVazio('#inputState', address.state);
+    preencherInputSeVazio('#inputComplement', address.complement);
+
+    setTextIfExists('#txtCardMessage', 'Endereco preenchido automaticamente. Confira os dados.');
+  } catch (error) {
+    setTextIfExists('#txtCardMessage', getErrorMessage(error) || 'Nao foi possivel localizar o CEP.');
+  }
+}
+
+async function criarCheckoutCartaoHospedado() {
+  if (isCreatingCardCheckout) {
+    return;
+  }
+
+  const validation = validarFormularioCartao();
+  if (!validation.ok) {
+    setTextIfExists('#txtCardMessage', validation.message);
+
+    if (validation.elementId) {
+      await focarElementoOpcional(validation.elementId);
+    }
+    return;
+  }
+
+  isCreatingCardCheckout = true;
+  setCheckoutCartaoDisponivel(false);
+  showAndExpandIfExists('#loadingStrip');
+  setTextIfExists('#txtCardMessage', 'Redirecionando para o Mercado Pago...');
+
+  try {
+    const payload = coletarPayloadCheckoutCartao();
+    const result = await createHostedDonationCheckout(payload);
+
+    if (!result?.checkoutUrl) {
+      throw new Error('O Mercado Pago nao retornou a URL do checkout.');
+    }
+
+    wixLocationFrontend.to(result.checkoutUrl);
+  } catch (error) {
+    setTextIfExists('#txtCardMessage', getErrorMessage(error) || 'Nao foi possivel criar o checkout.');
+  } finally {
+    isCreatingCardCheckout = false;
+    setCheckoutCartaoDisponivel(true);
+    hideAndCollapseIfExists('#loadingStrip');
+  }
+}
+
+function validarFormularioCartao() {
+  const requiredFields = [
+    ['#inputFirstName', 'Informe o nome.'],
+    ['#inputLastName', 'Informe o sobrenome.'],
+    ['#inputEmail', 'Informe um email valido.'],
+    ['#inputPhone', 'Informe um celular com DDD.'],
+    ['#inputCpf', 'Informe um CPF valido.'],
+    ['#inputZipCode', 'Informe um CEP valido.'],
+    ['#inputStreet', 'Informe o endereco.'],
+    ['#inputStreetNumber', 'Informe o numero.'],
+    ['#inputNeighborhood', 'Informe o bairro.'],
+    ['#inputCity', 'Informe a cidade.'],
+    ['#inputState', 'Informe o estado com a UF.']
+  ];
+
+  for (const [elementId, message] of requiredFields) {
+    const value = getInputValueIfExists(elementId);
+    if (!normalizeStringCard(value)) {
+      return { ok: false, elementId, message };
+    }
+  }
+
+  if (!isValidEmail(getInputValueIfExists('#inputEmail'))) {
+    return { ok: false, elementId: '#inputEmail', message: 'Informe um email valido.' };
+  }
+
+  const emailConfirm = getOptionalElement('#inputEmailConfirm');
+  if (emailConfirm && 'value' in emailConfirm) {
+    const confirmValue = normalizeStringCard(emailConfirm.value);
+    if (confirmValue && confirmValue !== normalizeStringCard(getInputValueIfExists('#inputEmail'))) {
+      return { ok: false, elementId: '#inputEmailConfirm', message: 'Os emails precisam ser iguais.' };
+    }
+  }
+
+  if (!isValidBrazilPhoneCard(getInputValueIfExists('#inputPhone'))) {
+    return { ok: false, elementId: '#inputPhone', message: 'Informe um celular com DDD.' };
+  }
+
+  if (!isValidCpfCard(getInputValueIfExists('#inputCpf'))) {
+    return { ok: false, elementId: '#inputCpf', message: 'Informe um CPF valido.' };
+  }
+
+  if (!/^\d{8}$/.test(normalizeZipCodeBrazil(getInputValueIfExists('#inputZipCode')))) {
+    return { ok: false, elementId: '#inputZipCode', message: 'Informe um CEP valido.' };
+  }
+
+  if (!/^[A-Z]{2}$/.test(formatarEstado(getInputValueIfExists('#inputState')))) {
+    return { ok: false, elementId: '#inputState', message: 'Informe o estado com a UF.' };
+  }
+
+  if (!cardSelectedRecurrence) {
+    return { ok: false, elementId: '', message: 'Selecione a frequencia da doacao.' };
+  }
+
+  if (obterValorSelecionadoCartao() <= 0) {
+    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor valido para a doacao.' };
+  }
+
+  const checkboxTerms = getOptionalElement('#checkboxTerms');
+  if (!checkboxTerms || checkboxTerms.checked !== true) {
+    return { ok: false, elementId: '#checkboxTerms', message: 'Aceite os termos para continuar.' };
+  }
+
+  return { ok: true, elementId: '', message: '' };
+}
+
+function coletarPayloadCheckoutCartao() {
+  return {
+    firstName: normalizeStringCard(getInputValueIfExists('#inputFirstName')),
+    lastName: normalizeStringCard(getInputValueIfExists('#inputLastName')),
+    email: normalizeStringCard(getInputValueIfExists('#inputEmail')).toLowerCase(),
+    phone: normalizePhoneBrazil(getInputValueIfExists('#inputPhone')),
+    cpf: normalizeCpfCard(getInputValueIfExists('#inputCpf')),
+    amount: obterValorSelecionadoCartao(),
+    amountSource: cardSelectedPresetAmount ? 'preset' : 'custom',
+    presetCode: cardSelectedPresetCode,
+    recurrence: cardSelectedRecurrence,
+    zipCode: normalizeZipCodeBrazil(getInputValueIfExists('#inputZipCode')),
+    street: normalizeStringCard(getInputValueIfExists('#inputStreet')),
+    streetNumber: normalizeStringCard(getInputValueIfExists('#inputStreetNumber')),
+    complement: normalizeStringCard(getInputValueIfExists('#inputComplement')),
+    neighborhood: normalizeStringCard(getInputValueIfExists('#inputNeighborhood')),
+    city: normalizeStringCard(getInputValueIfExists('#inputCity')),
+    state: formatarEstado(getInputValueIfExists('#inputState')),
+    termsAccepted: true
+  };
+}
+
+function atualizarResumoCartao() {
+  const amount = obterValorSelecionadoCartao();
+  if (!cardSelectedRecurrence || amount <= 0) {
+    setTextIfExists('#txtSubscriptionSummary', 'Escolha a frequencia e o valor para continuar.');
+    return;
+  }
+
+  const formattedAmount = formatCurrency(amount);
+
+  if (cardSelectedRecurrence === 'one_time') {
+    setTextIfExists('#txtSubscriptionSummary', `Voce vai fazer uma doacao unica de ${formattedAmount}.`);
+    return;
+  }
+
+  if (cardSelectedRecurrence === 'weekly') {
+    setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por semana ate cancelar.`);
+    return;
+  }
+
+  if (cardSelectedRecurrence === 'yearly') {
+    setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por ano ate cancelar.`);
+    return;
+  }
+
+  setTextIfExists('#txtSubscriptionSummary', `Voce vai doar ${formattedAmount} por mes ate cancelar.`);
+}
+
+function atualizarBotoesFrequenciaCartao() {
+  Object.entries(CARD_FREQUENCY_BUTTONS).forEach(([recurrence, buttonId]) => {
+    atualizarBotaoSelecionavelCartao(buttonId, recurrence === cardSelectedRecurrence);
+  });
+}
+
+function atualizarBotoesValorCartao() {
+  Object.entries(CARD_AMOUNT_PRESETS).forEach(([buttonId, config]) => {
+    atualizarBotaoSelecionavelCartao(buttonId, config.amount === cardSelectedPresetAmount);
+  });
+}
+
+/**
+ * @param {string} buttonId
+ * @param {boolean} isSelected
+ */
+function atualizarBotaoSelecionavelCartao(buttonId, isSelected) {
+  const button = getOptionalElement(buttonId);
+  if (!button || !('label' in button)) {
+    return;
+  }
+
+  const originalLabel = cardOriginalButtonLabels.get(buttonId) || button.label;
+  button.label = isSelected ? `> ${removerPrefixoSelecionadoCartao(originalLabel)}` : removerPrefixoSelecionadoCartao(originalLabel);
+}
+
+/**
+ * @param {string} label
+ */
+function removerPrefixoSelecionadoCartao(label) {
+  return String(label || '').replace(/^>\s*/, '');
+}
+
+function limparBuscaCepAgendada() {
+  if (!cepLookupTimer) {
+    return;
+  }
+
+  clearTimeout(cepLookupTimer);
+  cepLookupTimer = null;
+}
+
+function obterValorSelecionadoCartao() {
+  const customAmount = parseValorCartao(getInputValueIfExists('#inputAmountCustom'));
+  if (customAmount > 0) {
+    return customAmount;
+  }
+
+  return cardSelectedPresetAmount || 0;
+}
+
+/**
+ * @param {string} selector
+ * @param {(value: string) => string} formatter
+ */
+function configurarMascaraInput(selector, formatter) {
+  const input = getOptionalElement(selector);
+  if (!input || typeof input.onInput !== 'function') {
+    return;
+  }
+
+  input.onInput(() => {
+    input.value = formatter(input.value);
+  });
+}
+
+/**
+ * @param {string} selector
+ */
+function getInputValueIfExists(selector) {
+  const input = getOptionalElement(selector);
+  return input && 'value' in input ? String(input.value || '') : '';
+}
+
+/**
+ * @param {string} selector
+ * @param {string} value
+ */
+function preencherInputSeVazio(selector, value) {
+  const input = getOptionalElement(selector);
+  if (!input || !('value' in input) || !normalizeStringCard(value)) {
+    return;
+  }
+
+  if (!normalizeStringCard(input.value)) {
+    input.value = value;
+  }
+}
+
+/**
+ * @param {string} selector
+ */
+async function focarElementoOpcional(selector) {
+  const element = getOptionalElement(selector);
+  if (!element) {
+    return;
+  }
+
+  if (typeof element.scrollTo === 'function') {
+    await element.scrollTo();
+  }
+
+  if (typeof element.focus === 'function') {
+    element.focus();
+  }
+}
+
+/**
+ * @param {boolean} available
+ */
+function setCheckoutCartaoDisponivel(available) {
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (!button) {
+    return;
+  }
+
+  if (available && typeof button.enable === 'function') {
+    button.enable();
+  }
+
+  if (!available && typeof button.disable === 'function') {
+    button.disable();
+  }
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizeStringCard(value) {
+  return String(value || '').trim();
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizeCpfCard(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 11);
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizePhoneBrazil(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+
+  if (digits.length >= 12 && digits.startsWith('55')) {
+    digits = digits.slice(2);
+  }
+
+  return digits.slice(0, 11);
+}
+
+/**
+ * @param {unknown} value
+ */
+function normalizeZipCodeBrazil(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 8);
+}
+
+/**
+ * @param {unknown} value
+ */
+function parseValorCartao(value) {
+  const normalized = normalizeStringCard(value).replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
+  const amount = Number(normalized);
+  return !amount || Number.isNaN(amount) ? 0 : Number(amount.toFixed(2));
+}
+
+/**
+ * @param {unknown} value
+ */
+function formatarCpf(value) {
+  const digits = normalizeCpfCard(value);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return digits.replace(/(\d{3})(\d+)/, '$1.$2');
+  if (digits.length <= 9) return digits.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
+
+  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+}
+
+/**
+ * @param {unknown} value
+ */
+function formatarTelefoneBrasil(value) {
+  const digits = normalizePhoneBrazil(value);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return digits.replace(/(\d{2})(\d+)/, '($1) $2');
+  if (digits.length <= 10) return digits.replace(/(\d{2})(\d{4})(\d+)/, '($1) $2-$3');
+
+  return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+}
+
+/**
+ * @param {unknown} value
+ */
+function formatarCep(value) {
+  const digits = normalizeZipCodeBrazil(value);
+
+  if (digits.length <= 5) {
+    return digits;
+  }
+
+  return digits.replace(/(\d{5})(\d{1,3})/, '$1-$2');
+}
+
+/**
+ * @param {unknown} value
+ */
+function formatarEstado(value) {
+  return String(value || '').replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase();
+}
+
+/**
+ * @param {unknown} value
+ */
+function formatarValorDigitadoCartao(value) {
+  return String(value || '')
+    .replace(/[^\d,.\sR$]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * @param {string} phone
+ */
+function isValidBrazilPhoneCard(phone) {
+  return /^\d{10,11}$/.test(normalizePhoneBrazil(phone));
+}
+
+/**
+ * @param {string} value
+ */
+function isValidCpfCard(value) {
+  const cpf = normalizeCpfCard(value);
+
+  if (!/^\d{11}$/.test(cpf)) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  let sum = 0;
+  for (let index = 0; index < 9; index += 1) {
+    sum += Number(cpf[index]) * (10 - index);
+  }
+
+  let firstDigit = (sum * 10) % 11;
+  if (firstDigit === 10) firstDigit = 0;
+  if (firstDigit !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let index = 0; index < 10; index += 1) {
+    sum += Number(cpf[index]) * (11 - index);
+  }
+
+  let secondDigit = (sum * 10) % 11;
+  if (secondDigit === 10) secondDigit = 0;
+
+  return secondDigit === Number(cpf[10]);
 }
 
 function iniciarConsultaStatus() {
