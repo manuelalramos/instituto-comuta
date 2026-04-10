@@ -616,7 +616,6 @@ function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     if (pendingCardCheckoutUrl) {
-      abrirCheckoutCartao(pendingCardCheckoutUrl);
       return;
     }
 
