@@ -41,6 +41,8 @@ let cardSelectedPresetCode = '';
 let cepLookupTimer = null;
 /** @type {boolean} */
 let isCreatingCardCheckout = false;
+/** @type {boolean} */
+let isUpdatingCardAmountInput = false;
 const cardOriginalButtonLabels = new Map();
 
 $w.onReady(function () {
@@ -524,6 +526,10 @@ function configurarInputValorCartao() {
   }
 
   inputValor.onInput(() => {
+    if (isUpdatingCardAmountInput) {
+      return;
+    }
+
     inputValor.value = formatarValorDigitadoCartao(inputValor.value);
 
     if (parseValorCartao(inputValor.value) > 0) {
@@ -537,8 +543,12 @@ function configurarInputValorCartao() {
 
   if (typeof inputValor.onBlur === 'function') {
     inputValor.onBlur(() => {
+      if (isUpdatingCardAmountInput) {
+        return;
+      }
+
       const amount = parseValorCartao(inputValor.value);
-      inputValor.value = amount > 0 ? formatCurrency(amount) : '';
+      inputValor.value = amount > 0 ? formatarValorPresetInputCartao(amount) : '';
       atualizarResumoCartao();
     });
   }
@@ -597,6 +607,7 @@ function configurarBotaoCheckoutCartao() {
 function selecionarFrequenciaCartao(recurrence) {
   cardSelectedRecurrence = recurrence;
   atualizarBotoesFrequenciaCartao();
+  atualizarBotoesValorCartao();
   atualizarResumoCartao();
 }
 
@@ -610,9 +621,12 @@ function selecionarValorPresetCartao(amount, presetCode) {
 
   const inputValor = getOptionalElement('#inputAmountCustom');
   if (inputValor && 'value' in inputValor) {
-    inputValor.value = formatCurrency(amount);
+    isUpdatingCardAmountInput = true;
+    inputValor.value = formatarValorPresetInputCartao(amount);
+    isUpdatingCardAmountInput = false;
   }
 
+  atualizarBotoesFrequenciaCartao();
   atualizarBotoesValorCartao();
   atualizarResumoCartao();
 }
@@ -1019,6 +1033,13 @@ function formatarValorDigitadoCartao(value) {
     .replace(/[^\d,.\sR$]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * @param {number} amount
+ */
+function formatarValorPresetInputCartao(amount) {
+  return amount.toFixed(2).replace('.', ',');
 }
 
 /**
