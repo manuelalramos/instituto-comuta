@@ -616,6 +616,7 @@ function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     if (pendingCardCheckoutUrl) {
+      abrirCheckoutCartao(pendingCardCheckoutUrl);
       return;
     }
 
@@ -748,8 +749,10 @@ async function criarCheckoutCartaoHospedado() {
 
     pendingCardCheckoutUrl = checkoutUrl;
     configurarLinkBotaoCheckoutCartao(checkoutUrl);
-    await esperarCheckoutCartao(150);
-    abrirCheckoutCartao(checkoutUrl);
+    setCheckoutCartaoDisponivel(true);
+    hideAndCollapseIfExists('#loadingStrip');
+    definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
+    setCardMessage('Pagamento pronto. Toque no botao para abrir o Mercado Pago.');
   } catch (error) {
     limparCheckoutCartaoPendente();
     setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
@@ -1134,7 +1137,7 @@ function abrirCheckoutCartao(checkoutUrl) {
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = setTimeout(() => {
     finalizarFallbackCheckoutCartao(url);
-  }, 120);
+  }, 800);
 }
 
 /**
