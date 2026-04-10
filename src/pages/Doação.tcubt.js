@@ -1043,6 +1043,16 @@ function formatarValorPresetInputCartao(amount) {
 }
 
 /**
+ * @param {number} amount
+ */
+function formatCurrency(amount) {
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+}
+
+/**
  * @param {string} phone
  */
 function isValidBrazilPhoneCard(phone) {
