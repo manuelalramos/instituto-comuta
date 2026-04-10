@@ -19,7 +19,7 @@ const CARD_AMOUNT_PRESETS = {
 };
 const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inputEmailCard'];
 const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
-const CARD_MESSAGE_SELECTORS = ['#txtCardMessage', '#text6'];
+const CARD_MESSAGE_SELECTORS = ['#txtCardStatus', '#txtCardMessage'];
 const CARD_SUMMARY_SELECTORS = ['#txtSubscriptionSummary'];
 
 /** @type {string | null} */
@@ -626,12 +626,7 @@ function selecionarValorPresetCartao(amount, presetCode) {
   cardSelectedPresetAmount = amount;
   cardSelectedPresetCode = presetCode;
 
-  const inputValor = getOptionalElement('#inputAmountCustom');
-  if (inputValor && 'value' in inputValor) {
-    isUpdatingCardAmountInput = true;
-    inputValor.value = formatarValorPresetInputCartao(amount);
-    isUpdatingCardAmountInput = false;
-  }
+  escreverValorCartaoNoInput(amount);
 
   atualizarBotoesFrequenciaCartao();
   atualizarBotoesValorCartao();
@@ -938,6 +933,33 @@ function preencherInputSeVazio(selector, value) {
   if (!normalizeStringCard(input.value)) {
     input.value = value;
   }
+}
+
+/**
+ * @param {number} amount
+ */
+function escreverValorCartaoNoInput(amount) {
+  const inputValor = getOptionalElement('#inputAmountCustom');
+  if (!inputValor || !('value' in inputValor)) {
+    return;
+  }
+
+  const formatted = formatarValorPresetInputCartao(amount);
+
+  isUpdatingCardAmountInput = true;
+  inputValor.value = formatted;
+  isUpdatingCardAmountInput = false;
+
+  setTimeout(() => {
+    const currentInput = getOptionalElement('#inputAmountCustom');
+    if (!currentInput || !('value' in currentInput)) {
+      return;
+    }
+
+    isUpdatingCardAmountInput = true;
+    currentInput.value = formatted;
+    isUpdatingCardAmountInput = false;
+  }, 0);
 }
 
 /**
