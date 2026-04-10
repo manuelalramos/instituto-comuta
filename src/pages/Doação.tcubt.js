@@ -49,6 +49,10 @@ let isCreatingCardCheckout = false;
 let isUpdatingCardAmountInput = false;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let cardCheckoutFeedbackTimer = null;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let cardCheckoutRedirectTimer = null;
+/** @type {string} */
+let pendingCardCheckoutUrl = '';
 const cardOriginalButtonLabels = new Map();
 
 $w.onReady(function () {
@@ -489,10 +493,12 @@ function configurarCheckoutCartao() {
   configurarInputValorCartao();
   configurarMascarasCartao();
   configurarBuscaCepCartao();
+  configurarInvalidacaoCheckoutCartao();
   configurarBotaoCheckoutCartao();
 }
 
 function prepararCheckoutCartao() {
+  limparCheckoutCartaoPendente();
   setCardMessage('Preencha os dados para continuar no Mercado Pago.');
   setCardSummary('Escolha a frequência e o valor para continuar.');
   restaurarLabelBotaoCheckoutCartao();
@@ -540,6 +546,7 @@ function configurarInputValorCartao() {
       return;
     }
 
+    limparCheckoutCartaoPendente();
     inputValor.value = formatarValorDigitadoCartao(inputValor.value);
 
     if (parseValorCartao(inputValor.value) > 0) {
@@ -608,7 +615,51 @@ function configurarBuscaCepCartao() {
 function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
+    if (pendingCardCheckoutUrl) {
+      abrirCheckoutCartao(pendingCardCheckoutUrl);
+      return;
+    }
+
     await criarCheckoutCartaoHospedado();
+  });
+}
+
+function configurarInvalidacaoCheckoutCartao() {
+  const selectors = [
+    '#inputFirstName',
+    '#inputLastName',
+    '#inputPhone',
+    '#inputCpf',
+    '#inputZipCode',
+    '#inputStreet',
+    '#inputStreetNumber',
+    '#inputComplement',
+    '#inputNeighborhood',
+    '#inputCity',
+    '#inputState',
+    '#inputAmountCustom',
+    '#checkboxTerms',
+    ...CARD_EMAIL_PRIMARY_SELECTORS,
+    ...CARD_EMAIL_CONFIRM_SELECTORS
+  ];
+
+  selectors.forEach((selector) => {
+    const element = getOptionalElement(selector);
+    if (!element) {
+      return;
+    }
+
+    if (typeof element.onInput === 'function') {
+      element.onInput(() => {
+        limparCheckoutCartaoPendente();
+      });
+    }
+
+    if (typeof element.onChange === 'function') {
+      element.onChange(() => {
+        limparCheckoutCartaoPendente();
+      });
+    }
   });
 }
 
@@ -616,6 +667,7 @@ function configurarBotaoCheckoutCartao() {
  * @param {'one_time' | 'weekly' | 'monthly' | 'yearly'} recurrence
  */
 function selecionarFrequenciaCartao(recurrence) {
+  limparCheckoutCartaoPendente();
   cardSelectedRecurrence = recurrence;
   atualizarBotoesFrequenciaCartao();
   atualizarBotoesValorCartao();
@@ -627,6 +679,7 @@ function selecionarFrequenciaCartao(recurrence) {
  * @param {string} presetCode
  */
 function selecionarValorPresetCartao(amount, presetCode) {
+  limparCheckoutCartaoPendente();
   cardSelectedPresetAmount = amount;
   cardSelectedPresetCode = presetCode;
 
@@ -669,8 +722,6 @@ async function criarCheckoutCartaoHospedado() {
     return;
   }
 
-  let isRedirectingToMercadoPago = false;
-
   const validation = validarFormularioCartao();
   if (!validation.ok) {
     setCardMessage(validation.message);
@@ -696,19 +747,19 @@ async function criarCheckoutCartaoHospedado() {
       throw new Error('O Mercado Pago nao retornou a URL do checkout.');
     }
 
+    pendingCardCheckoutUrl = checkoutUrl;
+    configurarLinkBotaoCheckoutCartao(checkoutUrl);
     await esperarCheckoutCartao(150);
-    isRedirectingToMercadoPago = true;
-    wixLocationFrontend.to(checkoutUrl);
+    abrirCheckoutCartao(checkoutUrl);
   } catch (error) {
+    limparCheckoutCartaoPendente();
     setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
     flashLabelBotaoCheckoutCartao(getFriendlyCardCheckoutButtonLabel(error));
+    setCheckoutCartaoDisponivel(true);
+    hideAndCollapseIfExists('#loadingStrip');
+    restaurarLabelBotaoCheckoutCartao();
   } finally {
     isCreatingCardCheckout = false;
-    if (!isRedirectingToMercadoPago) {
-      setCheckoutCartaoDisponivel(true);
-      hideAndCollapseIfExists('#loadingStrip');
-      restaurarLabelBotaoCheckoutCartao();
-    }
   }
 }
 
@@ -1057,6 +1108,100 @@ function setCheckoutCartaoDisponivel(available) {
 
   if (!available && typeof button.disable === 'function') {
     button.disable();
+  }
+}
+
+/**
+ * @param {string} checkoutUrl
+ */
+function abrirCheckoutCartao(checkoutUrl) {
+  const url = normalizeStringCard(checkoutUrl);
+  if (!url) {
+    return;
+  }
+
+  pendingCardCheckoutUrl = url;
+  configurarLinkBotaoCheckoutCartao(url);
+  definirLabelBotaoCheckoutCartao('Abrindo Mercado Pago...');
+  setCardMessage('Te direcionando para o Mercado Pago...');
+  setCheckoutCartaoDisponivel(false);
+
+  try {
+    wixLocationFrontend.to(url);
+  } catch (error) {
+    console.log('Falha ao redirecionar com wixLocation:', getErrorMessage(error));
+  }
+
+  clearTimeoutIfExists(cardCheckoutRedirectTimer);
+  cardCheckoutRedirectTimer = setTimeout(() => {
+    tentarAbrirCheckoutCartaoNoNavegador(url);
+  }, 120);
+}
+
+/**
+ * @param {string} checkoutUrl
+ */
+function tentarAbrirCheckoutCartaoNoNavegador(checkoutUrl) {
+  const url = normalizeStringCard(checkoutUrl);
+  if (!url) {
+    return;
+  }
+
+  try {
+    if (globalThis?.location && typeof globalThis.location.assign === 'function') {
+      globalThis.location.assign(url);
+    }
+  } catch (error) {
+    console.log('Falha ao redirecionar com location.assign:', getErrorMessage(error));
+  }
+
+  clearTimeoutIfExists(cardCheckoutRedirectTimer);
+  cardCheckoutRedirectTimer = setTimeout(() => {
+    if (pendingCardCheckoutUrl !== url) {
+      return;
+    }
+
+    setCheckoutCartaoDisponivel(true);
+    hideAndCollapseIfExists('#loadingStrip');
+    definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
+    setCardMessage('Se o Mercado Pago nao abriu automaticamente, toque no botao novamente.');
+  }, 1200);
+}
+
+/**
+ * @param {string} checkoutUrl
+ */
+function configurarLinkBotaoCheckoutCartao(checkoutUrl) {
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (!button) {
+    return;
+  }
+
+  if ('link' in button) {
+    button.link = checkoutUrl;
+  }
+
+  if ('target' in button) {
+    button.target = '_self';
+  }
+}
+
+function limparCheckoutCartaoPendente() {
+  pendingCardCheckoutUrl = '';
+  clearTimeoutIfExists(cardCheckoutRedirectTimer);
+  cardCheckoutRedirectTimer = null;
+
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (!button) {
+    return;
+  }
+
+  if ('link' in button) {
+    button.link = '';
+  }
+
+  if ('target' in button) {
+    button.target = '_self';
   }
 }
 
@@ -1415,6 +1560,17 @@ function limparTimerFeedbackBotaoCheckoutCartao() {
 
   clearTimeout(cardCheckoutFeedbackTimer);
   cardCheckoutFeedbackTimer = null;
+}
+
+/**
+ * @param {ReturnType<typeof setTimeout> | null} timer
+ */
+function clearTimeoutIfExists(timer) {
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
 }
 
 /**
