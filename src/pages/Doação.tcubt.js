@@ -622,6 +622,7 @@ function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     if (pendingCardCheckoutUrl) {
+      abrirCheckoutCartaoPreparado();
       return;
     }
 
@@ -1128,85 +1129,46 @@ function redirecionarParaCheckoutCartao(checkoutUrl) {
   }
 
   pendingCardCheckoutUrl = url;
-  configurarLinkBotaoCheckoutCartao(url);
+  setCheckoutCartaoDisponivel(true);
+  hideAndCollapseIfExists('#loadingStrip');
+  definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
+  setCardMessage('Pagamento pronto. Toque no botao para abrir o Mercado Pago.');
+}
+
+function abrirCheckoutCartaoPreparado() {
+  const url = normalizeStringCard(pendingCardCheckoutUrl);
+  if (!url) {
+    return;
+  }
+
   definirLabelBotaoCheckoutCartao('Abrindo Mercado Pago...');
   setCardMessage('Te direcionando para o Mercado Pago...');
-  setCheckoutCartaoDisponivel(false);
 
   try {
-    if (typeof window !== 'undefined' && window.location && typeof window.location.assign === 'function') {
-      window.location.assign(url);
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.href = url;
       return;
     }
 
     wixLocationFrontend.to(url);
   } catch (error) {
-    console.log('Falha ao redirecionar para o checkout:', getErrorMessage(error));
-  }
-
-  clearTimeoutIfExists(cardCheckoutRedirectTimer);
-  cardCheckoutRedirectTimer = setTimeout(() => {
-    finalizarFallbackCheckoutCartao(url);
-  }, 800);
-}
-
-/**
- * @param {string} checkoutUrl
- */
-function finalizarFallbackCheckoutCartao(checkoutUrl) {
-  const url = normalizeStringCard(checkoutUrl);
-  if (!url) {
-    return;
-  }
-
-  clearTimeoutIfExists(cardCheckoutRedirectTimer);
-  cardCheckoutRedirectTimer = setTimeout(() => {
-    if (pendingCardCheckoutUrl !== url) {
-      return;
-    }
-
-    setCheckoutCartaoDisponivel(true);
-    hideAndCollapseIfExists('#loadingStrip');
+    console.log('Falha ao abrir checkout preparado:', getErrorMessage(error));
+    setCardMessage('Nao foi possivel abrir automaticamente. Tente tocar no botao novamente.');
     definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
-    setCardMessage('Se o Mercado Pago nao abriu automaticamente, toque no botao novamente.');
-  }, 1200);
+  }
 }
 
 /**
  * @param {string} checkoutUrl
  */
 function configurarLinkBotaoCheckoutCartao(checkoutUrl) {
-  const button = getOptionalElement('#btnContinueToMercadoPago');
-  if (!button) {
-    return;
-  }
-
-  if ('link' in button) {
-    button.link = checkoutUrl;
-  }
-
-  if ('target' in button) {
-    button.target = '_self';
-  }
+  pendingCardCheckoutUrl = normalizeStringCard(checkoutUrl);
 }
 
 function limparCheckoutCartaoPendente() {
   pendingCardCheckoutUrl = '';
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = null;
-
-  const button = getOptionalElement('#btnContinueToMercadoPago');
-  if (!button) {
-    return;
-  }
-
-  if ('link' in button) {
-    button.link = '';
-  }
-
-  if ('target' in button) {
-    button.target = '_self';
-  }
 }
 
 function setCardMessage(text) {
