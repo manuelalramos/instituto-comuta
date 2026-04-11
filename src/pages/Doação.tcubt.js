@@ -549,9 +549,14 @@ function configurarInputValorCartao() {
     }
 
     limparCheckoutCartaoPendente();
-    inputValor.value = formatarValorDigitadoCartao(inputValor.value);
+    const sanitizedValue = formatarValorDigitadoCartao(inputValor.value);
+    if (sanitizedValue !== inputValor.value) {
+      isUpdatingCardAmountInput = true;
+      inputValor.value = sanitizedValue;
+      isUpdatingCardAmountInput = false;
+    }
 
-    if (parseValorCartao(inputValor.value) > 0) {
+    if (parseValorCartao(sanitizedValue) > 0) {
       cardSelectedPresetAmount = null;
       cardSelectedPresetCode = '';
       atualizarBotoesValorCartao();
@@ -566,8 +571,7 @@ function configurarInputValorCartao() {
         return;
       }
 
-      const amount = parseValorCartao(inputValor.value);
-      inputValor.value = amount > 0 ? formatarValorPresetInputCartao(amount) : '';
+      inputValor.value = formatarValorDigitadoCartao(inputValor.value);
       atualizarResumoCartao();
     });
   }
@@ -618,7 +622,6 @@ function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     if (pendingCardCheckoutUrl) {
-      redirecionarParaCheckoutCartao(pendingCardCheckoutUrl);
       return;
     }
 
@@ -751,7 +754,10 @@ async function criarCheckoutCartaoHospedado() {
 
     pendingCardCheckoutUrl = checkoutUrl;
     configurarLinkBotaoCheckoutCartao(checkoutUrl);
-    redirecionarParaCheckoutCartao(checkoutUrl);
+    setCheckoutCartaoDisponivel(true);
+    hideAndCollapseIfExists('#loadingStrip');
+    definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
+    setCardMessage('Pagamento pronto. Toque no botao para abrir o Mercado Pago.');
   } catch (error) {
     limparCheckoutCartaoPendente();
     setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
@@ -1351,7 +1357,24 @@ function normalizeZipCodeBrazil(value) {
  * @param {unknown} value
  */
 function parseValorCartao(value) {
-  const normalized = normalizeStringCard(value).replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
+  const raw = normalizeStringCard(value).replace(/[^\d,.\-]/g, '');
+  if (!raw) {
+    return 0;
+  }
+
+  const lastCommaIndex = raw.lastIndexOf(',');
+  const lastDotIndex = raw.lastIndexOf('.');
+  const decimalIndex = Math.max(lastCommaIndex, lastDotIndex);
+
+  let normalized = '';
+  if (decimalIndex >= 0) {
+    const integerPart = raw.slice(0, decimalIndex).replace(/\D/g, '');
+    const decimalPart = raw.slice(decimalIndex + 1).replace(/\D/g, '').slice(0, 2);
+    normalized = decimalPart ? `${integerPart || '0'}.${decimalPart}` : integerPart;
+  } else {
+    normalized = raw.replace(/\D/g, '');
+  }
+
   const amount = Number(normalized);
   return !amount || Number.isNaN(amount) ? 0 : Number(amount.toFixed(2));
 }
@@ -1406,17 +1429,31 @@ function formatarEstado(value) {
  * @param {unknown} value
  */
 function formatarValorDigitadoCartao(value) {
-  return String(value || '')
-    .replace(/[^\d,.\sR$]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const raw = String(value || '').replace(/[^\d,.\sR$]/g, '').replace(/\s+/g, ' ').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const digitsOnly = raw.replace(/\D/g, '');
+  const lastCommaIndex = raw.lastIndexOf(',');
+  const lastDotIndex = raw.lastIndexOf('.');
+  const decimalIndex = Math.max(lastCommaIndex, lastDotIndex);
+
+  if (decimalIndex < 0) {
+    return digitsOnly;
+  }
+
+  const integerPart = raw.slice(0, decimalIndex).replace(/\D/g, '');
+  const decimalPart = raw.slice(decimalIndex + 1).replace(/\D/g, '').slice(0, 2);
+
+  return decimalPart ? `${integerPart || '0'},${decimalPart}` : (integerPart || '0');
 }
 
 /**
  * @param {number} amount
  */
 function formatarValorPresetInputCartao(amount) {
-  return Number.isInteger(amount) ? String(amount) : amount.toFixed(2).replace('.', ',');
+  return String(Number(amount || 0));
 }
 
 /**
