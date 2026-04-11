@@ -1,3 +1,5 @@
+/* global window */
+
 import { createPixCharge, getPixStatus } from 'backend/pix.web';
 import { createHostedDonationCheckout } from 'backend/subscriptions.web';
 import { lookupAddressByCep } from 'backend/address.web';
@@ -616,7 +618,7 @@ function configurarBotaoCheckoutCartao() {
   habilitarBotoesCartao(['#btnContinueToMercadoPago']);
   registrarCliqueOpcional('#btnContinueToMercadoPago', async () => {
     if (pendingCardCheckoutUrl) {
-      abrirCheckoutCartao(pendingCardCheckoutUrl);
+      redirecionarParaCheckoutCartao(pendingCardCheckoutUrl);
       return;
     }
 
@@ -749,10 +751,7 @@ async function criarCheckoutCartaoHospedado() {
 
     pendingCardCheckoutUrl = checkoutUrl;
     configurarLinkBotaoCheckoutCartao(checkoutUrl);
-    setCheckoutCartaoDisponivel(true);
-    hideAndCollapseIfExists('#loadingStrip');
-    definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
-    setCardMessage('Pagamento pronto. Toque no botao para abrir o Mercado Pago.');
+    redirecionarParaCheckoutCartao(checkoutUrl);
   } catch (error) {
     limparCheckoutCartaoPendente();
     setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
@@ -1116,7 +1115,7 @@ function setCheckoutCartaoDisponivel(available) {
 /**
  * @param {string} checkoutUrl
  */
-function abrirCheckoutCartao(checkoutUrl) {
+function redirecionarParaCheckoutCartao(checkoutUrl) {
   const url = normalizeStringCard(checkoutUrl);
   if (!url) {
     return;
@@ -1129,9 +1128,14 @@ function abrirCheckoutCartao(checkoutUrl) {
   setCheckoutCartaoDisponivel(false);
 
   try {
+    if (typeof window !== 'undefined' && window.location && typeof window.location.assign === 'function') {
+      window.location.assign(url);
+      return;
+    }
+
     wixLocationFrontend.to(url);
   } catch (error) {
-    console.log('Falha ao redirecionar com wixLocation:', getErrorMessage(error));
+    console.log('Falha ao redirecionar para o checkout:', getErrorMessage(error));
   }
 
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
