@@ -748,13 +748,14 @@ async function criarCheckoutCartaoHospedado() {
     const payload = coletarPayloadCheckoutCartao();
     const result = await createHostedDonationCheckout(payload);
     const checkoutUrl = normalizeStringCard(result?.checkoutUrl);
+    const redirectUrl = buildCardCheckoutRedirectUrl(result?.externalReference, checkoutUrl);
 
-    if (!checkoutUrl) {
+    if (!redirectUrl) {
       throw new Error('O Mercado Pago nao retornou a URL do checkout.');
     }
 
-    pendingCardCheckoutUrl = checkoutUrl;
-    configurarLinkBotaoCheckoutCartao(checkoutUrl);
+    pendingCardCheckoutUrl = redirectUrl;
+    configurarLinkBotaoCheckoutCartao(redirectUrl);
     setCheckoutCartaoDisponivel(true);
     hideAndCollapseIfExists('#loadingStrip');
     definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
@@ -1426,6 +1427,19 @@ function formatCurrency(amount) {
     style: 'currency',
     currency: 'BRL'
   });
+}
+
+/**
+ * @param {unknown} externalReference
+ * @param {string} fallbackUrl
+ */
+function buildCardCheckoutRedirectUrl(externalReference, fallbackUrl) {
+  const normalizedReference = normalizeStringCard(externalReference);
+  if (normalizedReference) {
+    return `/_functions/cardCheckoutRedirect?externalReference=${encodeURIComponent(normalizedReference)}`;
+  }
+
+  return normalizeStringCard(fallbackUrl);
 }
 
 /**

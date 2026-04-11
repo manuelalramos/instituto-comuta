@@ -1,9 +1,43 @@
-import { ok, badRequest } from 'wix-http-functions';
+import { ok, badRequest, notFound, response, serverError } from 'wix-http-functions';
 import wixData from 'wix-data';
 import { fetch } from 'wix-fetch';
 import { getSecret } from 'wix-secrets-backend';
 
 const DEFAULT_API_URL = 'https://api.mercadopago.com';
+
+export async function get_cardCheckoutRedirect(request) {
+  try {
+    const externalReference = normalizeString(getQueryValue(request, 'externalReference'));
+    if (!externalReference) {
+      return badRequest({ body: { error: 'externalReference obrigatorio.' } });
+    }
+
+    const results = await wixData.query('CardDonationIntents')
+      .eq('externalReference', externalReference)
+      .limit(1)
+      .find();
+
+    if (results.items.length === 0) {
+      return notFound({ body: { error: 'Checkout nao encontrado.' } });
+    }
+
+    const checkoutUrl = normalizeString(results.items[0]?.checkoutUrl);
+    if (!checkoutUrl) {
+      return notFound({ body: { error: 'URL do checkout ainda nao disponivel.' } });
+    }
+
+    return response({
+      status: 302,
+      headers: {
+        Location: checkoutUrl,
+        'Cache-Control': 'no-store, no-cache, must-revalidate'
+      },
+      body: ''
+    });
+  } catch (error) {
+    return serverError({ body: { error: error instanceof Error ? error.message : String(error) } });
+  }
+}
 
 export async function post_mercadoPagoWebhook(request) {
   try {
