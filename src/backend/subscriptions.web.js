@@ -73,7 +73,7 @@ export const createHostedDonationCheckout = webMethod(
       const recurrenceConfig = getRecurrenceConfig(input.recurrence, input.amount);
 
       await saveCardDonationIntent({
-        title: `Doacao cartao - ${externalReference}`,
+        title: `Doação cartão - ${externalReference}`,
         externalReference,
         donorFirstName: input.firstName,
         donorLastName: input.lastName,
@@ -254,7 +254,7 @@ async function createOneTimePreference(config, input, externalReference, donorFu
     items: [
       {
         title: 'Doacao Instituto Comuta',
-        description: 'Doacao unica com cartao',
+        description: 'Doação única com cartao',
         quantity: 1,
         currency_id: DEFAULT_CURRENCY_ID,
         unit_price: input.amount
@@ -406,11 +406,11 @@ async function getMercadoPagoConfig() {
   const notificationUrl = normalizeString(await getSecret('MP_NOTIFICATION_URL'));
 
   if (!token) {
-    throw new Error('Segredo MP_ACCESS_TOKEN nao encontrado.');
+    throw new Error('Segredo MP_ACCESS_TOKEN não encontrado.');
   }
 
   if (!backUrl) {
-    throw new Error('Segredo MP_SUBSCRIPTIONS_BACK_URL nao encontrado.');
+    throw new Error('Segredo MP_SUBSCRIPTIONS_BACK_URL não encontrado.');
   }
 
   return { token, apiUrl, backUrl, notificationUrl };
@@ -447,16 +447,16 @@ function normalizeCheckoutInput(rawInput) {
 function validateCheckoutInput(input) {
   if (!input.firstName) throw new Error('Informe o nome.');
   if (!input.lastName) throw new Error('Informe o sobrenome.');
-  if (!isValidEmail(input.email)) throw new Error('Informe um email valido.');
+  if (!isValidEmail(input.email)) throw new Error('Informe um email válido.');
   if (!isValidBrazilPhone(input.phone)) throw new Error('Informe um celular com DDD.');
-  if (!isValidCpf(input.cpf)) throw new Error('Informe um CPF valido.');
+  if (!isValidCpf(input.cpf)) throw new Error('Informe um CPF válido.');
   if (!input.amount || Number.isNaN(input.amount) || input.amount <= 0) {
-    throw new Error('Informe um valor valido para a doacao.');
+    throw new Error('Informe um valor válido para a doacao.');
   }
-  if (!input.recurrence) throw new Error('Selecione a frequencia da doacao.');
-  if (!isValidZipCode(input.zipCode)) throw new Error('Informe um CEP valido.');
-  if (!input.street) throw new Error('Informe o endereco.');
-  if (!input.streetNumber) throw new Error('Informe o numero.');
+  if (!input.recurrence) throw new Error('Selecione a frequencia da doação.');
+  if (!isValidZipCode(input.zipCode)) throw new Error('Informe um CEP válido.');
+  if (!input.street) throw new Error('Informe o endereço.');
+  if (!input.streetNumber) throw new Error('Informe o número.');
   if (!input.neighborhood) throw new Error('Informe o bairro.');
   if (!input.city) throw new Error('Informe a cidade.');
   if (!/^[A-Z]{2}$/.test(input.state)) throw new Error('Informe o estado com a UF.');
@@ -586,7 +586,7 @@ function appendQuery(baseUrl, params) {
 
     return url.toString();
   } catch (error) {
-    throw new Error('A URL de retorno MP_SUBSCRIPTIONS_BACK_URL esta invalida.');
+    throw new Error('A URL de retorno MP_SUBSCRIPTIONS_BACK_URL esta inválida.');
   }
 }
 
@@ -716,11 +716,11 @@ function getFriendlyCheckoutCreationErrorMessage(error) {
   const message = error instanceof Error ? error.message : String(error || '');
 
   if (message.includes('MP_ACCESS_TOKEN')) {
-    return 'O token do Mercado Pago nao esta configurado no Wix Secrets.';
+    return 'O token do Mercado Pago não esta configurado no Wix Secrets.';
   }
 
   if (message.includes('MP_SUBSCRIPTIONS_BACK_URL')) {
-    return 'A URL de retorno do Mercado Pago esta faltando ou invalida no Wix Secrets.';
+    return 'A URL de retorno do Mercado Pago está faltando ou inválida no Wix Secrets.';
   }
 
   if (message.includes('payment_methods not found') || message.includes('payment method')) {
@@ -728,14 +728,14 @@ function getFriendlyCheckoutCreationErrorMessage(error) {
   }
 
   if (message.includes('online payments in Brazil') || message.includes('pagamentos online em Brasil')) {
-    return 'A conta do Mercado Pago ainda nao esta habilitada para esse tipo de cobranca no Brasil.';
+    return 'A conta do Mercado Pago ainda não está habilitada para esse tipo de cobranca no Brasil.';
   }
 
   if (message.includes('Informe')) {
     return message;
   }
 
-  return message || 'Nao foi possivel criar o checkout do Mercado Pago.';
+  return message || 'Não foi possivel criar o checkout do Mercado Pago.';
 }
 
 /**

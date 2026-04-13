@@ -76,7 +76,7 @@ $w.onReady(function () {
       setTextIfExists('#ajudaPix', 'Pix copiado');
     } catch (error) {
       console.log('Erro ao copiar Pix:', getErrorMessage(error));
-      setTextIfExists('#ajudaPix', 'Nao foi possivel copiar o Pix');
+      setTextIfExists('#ajudaPix', 'Não foi possivél copiar o Pix');
     }
 
     setTimeout(() => {
@@ -129,7 +129,7 @@ function getOptionalElement(seletor) {
   try {
     return $w(seletor);
   } catch (error) {
-    console.log(`Elemento indisponivel no layout atual: ${seletor}`, getErrorMessage(error));
+    console.log(`Elemento indisponível no layout atual: ${seletor}`, getErrorMessage(error));
     return null;
   }
 }
@@ -247,7 +247,7 @@ async function gerarPix() {
   if (!amountRaw || Number.isNaN(amount) || amount <= 0) {
     await $w('#inputValor').scrollTo();
     $w('#inputValor').focus();
-    $w('#txtMensagem').text = 'Digite um valor valido para continuar';
+    $w('#txtMensagem').text = 'Digite um valor válido para continuar';
     return;
   }
 
@@ -261,7 +261,7 @@ async function gerarPix() {
   if (!isValidEmail(email)) {
     await $w('#inputEmail').scrollTo();
     $w('#inputEmail').focus();
-    $w('#txtMensagem').text = 'Digite um email valido para gerar o pagamento';
+    $w('#txtMensagem').text = 'Digite um email válido para gerar o pagamento';
     return;
   }
 
@@ -274,7 +274,7 @@ async function gerarPix() {
     const result = await comTimeout(
       createPixCharge({ amount, email }),
       20000,
-      'A geracao do Pix demorou demais. Tente novamente.'
+      'A gereção do Pix demorou demais. Tente novamente.'
     );
 
     currentDonationId = result.donationId || null;
@@ -308,7 +308,7 @@ async function gerarPix() {
       setTextIfExists('#txtPix', currentPixCode);
       showAndExpandIfExists('#txtPix');
 
-      setTextIfExists('#txtAjuda', 'Clique no codigo para copiar ou leia o QR Code');
+      setTextIfExists('#txtAjuda', 'Clique no código para copiar ou leia o QR Code');
       showAndExpandIfExists('#txtAjuda');
     }
 
@@ -378,10 +378,10 @@ async function copiarCodigoPix() {
 
   try {
     await wixWindowFrontend.copyToClipboard(currentPixCode);
-    setTextIfExists('#txtAjuda', 'Codigo copiado com sucesso.');
+    setTextIfExists('#txtAjuda', 'Código copiado com sucesso.');
   } catch (error) {
     console.log('Falha ao copiar:', getErrorMessage(error));
-    setTextIfExists('#txtAjuda', 'Nao foi possivel copiar automaticamente.');
+    setTextIfExists('#txtAjuda', 'Não foi possivel copiar automaticamente.');
   }
 
   showAndExpandIfExists('#txtAjuda');
@@ -743,9 +743,9 @@ async function buscarEnderecoPorCepCartao() {
     preencherInputSeVazio('#inputState', address.state);
     preencherInputSeVazio('#inputComplement', address.complement);
 
-    setCardMessage('Endereco preenchido automaticamente. Confira os dados.');
+    setCardMessage('Endereço preenchido automáticamente. Confira os dados.');
   } catch (error) {
-    setCardMessage(getErrorMessage(error) || 'Nao foi possivel localizar o CEP.');
+    setCardMessage(getErrorMessage(error) || 'Não foi possivel localizar o CEP.');
   }
 }
 
@@ -776,7 +776,7 @@ async function criarCheckoutCartaoHospedado() {
     const checkoutUrl = normalizeStringCard(result?.checkoutUrl);
 
     if (!checkoutUrl) {
-      throw new Error('O Mercado Pago nao retornou a URL do checkout.');
+      throw new Error('O Mercado Pago não retornou a URL do checkout.');
     }
 
     pendingCardCheckoutUrl = checkoutUrl;
@@ -800,10 +800,10 @@ function validarFormularioCartao() {
     ['#inputFirstName', 'Informe o nome.'],
     ['#inputLastName', 'Informe o sobrenome.'],
     ['#inputPhone', 'Informe um celular com DDD.'],
-    ['#inputCpf', 'Informe um CPF valido.'],
-    ['#inputZipCode', 'Informe um CEP valido.'],
+    ['#inputCpf', 'Informe um CPF válido.'],
+    ['#inputZipCode', 'Informe um CEP válido.'],
     ['#inputStreet', 'Informe o endereco.'],
-    ['#inputStreetNumber', 'Informe o numero.'],
+    ['#inputStreetNumber', 'Informe o número.'],
     ['#inputNeighborhood', 'Informe o bairro.'],
     ['#inputCity', 'Informe a cidade.'],
     ['#inputState', 'Informe o estado com a UF.']
@@ -817,11 +817,11 @@ function validarFormularioCartao() {
   }
 
   if (!cardSelectedRecurrence) {
-    return { ok: false, elementId: '', message: 'Selecione a frequÃªncia da doaÃ§Ã£o.' };
+    return { ok: false, elementId: '', message: 'Selecione a frequência da doação.' };
   }
 
   if (obterValorSelecionadoCartao() <= 0) {
-    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor vÃ¡lido para a doaÃ§Ã£o.' };
+    return { ok: false, elementId: '#inputAmountCustom', message: 'Informe um valor válido para a doação.' };
   }
 
   const cardEmailSelector = getCardEmailSelector();
@@ -856,7 +856,7 @@ function validarFormularioCartao() {
   }
 
   if (!normalizeStringCard(getStreetValueCartao())) {
-    return { ok: false, elementId: '#inputStreet', message: 'Informe o endereco.' };
+    return { ok: false, elementId: '#inputStreet', message: 'Informe o endereço.' };
   }
 
   if (!/^[A-Z]{2}$/.test(formatarEstado(getInputValueIfExists('#inputState')))) {
@@ -1162,7 +1162,7 @@ function redirecionarParaCheckoutCartao(checkoutUrl) {
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = setTimeout(() => {
     definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
-    setCardMessage('Se o Mercado Pago nao abriu, toque novamente no botao.');
+    setCardMessage('Se o Mercado Pago não abriu, toque novamente no botao.');
     setCheckoutCartaoDisponivel(true);
   }, 1800);
 
@@ -1171,9 +1171,9 @@ function redirecionarParaCheckoutCartao(checkoutUrl) {
   } catch (error) {
     clearTimeoutIfExists(cardCheckoutRedirectTimer);
     cardCheckoutRedirectTimer = null;
-    console.log('Falha ao redirecionar checkout do cartao:', getErrorMessage(error));
+    console.log('Falha ao redirecionar checkout do cartão:', getErrorMessage(error));
     definirLabelBotaoCheckoutCartao('Abrir Mercado Pago');
-    setCardMessage('Nao foi possivel abrir automaticamente. Tente tocar no botao novamente.');
+    setCardMessage('Não foi possivel abrir automaticamente. Tente tocar no botao novamente.');
     setCheckoutCartaoDisponivel(true);
   }
 }
@@ -1649,7 +1649,7 @@ function getFriendlyCardCheckoutErrorMessage(error) {
   const message = getErrorMessage(error) || 'Nao foi possivel criar o checkout.';
 
   if (message.includes('Unable to handle the request')) {
-    return 'O backend da assinatura falhou antes de criar o checkout. Revise os secrets do Mercado Pago e a configuracao da conta.';
+    return 'O backend da assinatura falhou antes de criar o checkout. Revise os secrets do Mercado Pago e a configuração da conta.';
   }
 
   if (message.includes('MP_SUBSCRIPTIONS_BACK_URL')) {
@@ -1661,7 +1661,7 @@ function getFriendlyCardCheckoutErrorMessage(error) {
   }
 
   if (message.includes('Mercado Pago nao retornou a URL do checkout')) {
-    return 'O Mercado Pago nao devolveu o link de pagamento. Confira as credenciais e o modo de teste.';
+    return 'O Mercado Pago não devolveu o link de pagamento. Confira as credenciais e o modo de teste.';
   }
 
   return message;
@@ -1713,7 +1713,7 @@ function getCardCheckoutFallbackLabel(text) {
   }
 
   if (message.includes('frequ')) {
-    return 'Escolha a frequencia';
+    return 'Escolha a frequência';
   }
 
   if (message.includes('termos')) {

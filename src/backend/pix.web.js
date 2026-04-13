@@ -76,7 +76,7 @@ async function syncPixDonation(pix) {
     const itemData = {
       donationId: pix.donationId,
       status: pix.status || 'pending',
-      title: `Doacao PIX ${pix.donationId}`,
+      title: `Doação PIX ${pix.donationId}`,
       expiresAt: pix.expiresAt || null
     };
 

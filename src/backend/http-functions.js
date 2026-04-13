@@ -18,12 +18,12 @@ export async function get_cardCheckoutRedirect(request) {
       .find();
 
     if (results.items.length === 0) {
-      return notFound({ body: { error: 'Checkout nao encontrado.' } });
+      return notFound({ body: { error: 'Checkout não encontrado.' } });
     }
 
     const checkoutUrl = normalizeString(results.items[0]?.checkoutUrl);
     if (!checkoutUrl) {
-      return notFound({ body: { error: 'URL do checkout ainda nao disponivel.' } });
+      return notFound({ body: { error: 'URL do checkout ainda não disponível.' } });
     }
 
     return response({
@@ -196,7 +196,7 @@ async function mercadoPagoGet(path) {
     DEFAULT_API_URL;
 
   if (!token) {
-    throw new Error('Segredo MP_ACCESS_TOKEN nao encontrado.');
+    throw new Error('Segredo MP_ACCESS_TOKEN não encontrado.');
   }
 
   const response = await fetch(`${apiUrl}${path}`, {
