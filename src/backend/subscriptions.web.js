@@ -61,106 +61,127 @@ export const createHostedDonationCheckout = webMethod(
    * @returns {Promise<HostedDonationCheckoutResult>}
    */
   async (rawInput) => {
-    const input = normalizeCheckoutInput(rawInput);
-    validateCheckoutInput(input);
+    let externalReference = '';
 
-    const config = await getMercadoPagoConfig();
-    const externalReference = makeExternalReference(input.recurrence);
-    const donorFullName = `${input.firstName} ${input.lastName}`.trim();
-    const recurrenceConfig = getRecurrenceConfig(input.recurrence, input.amount);
+    try {
+      const input = normalizeCheckoutInput(rawInput);
+      validateCheckoutInput(input);
 
-    await saveCardDonationIntent({
-      title: `Doacao cartao - ${externalReference}`,
-      externalReference,
-      donorFirstName: input.firstName,
-      donorLastName: input.lastName,
-      donorFullName,
-      email: input.email,
-      phone: input.phone,
-      cpf: input.cpf,
-      amount: input.amount,
-      currencyId: DEFAULT_CURRENCY_ID,
-      amountSource: input.amountSource,
-      presetCode: input.presetCode,
-      recurrence: input.recurrence,
-      frequency: recurrenceConfig.frequency,
-      frequencyType: recurrenceConfig.frequencyType,
-      status: 'creating_checkout',
-      zipCode: input.zipCode,
-      street: input.street,
-      streetNumber: input.streetNumber,
-      complement: input.complement,
-      neighborhood: input.neighborhood,
-      city: input.city,
-      state: input.state,
-      createdAtLocal: new Date(),
-      updatedAtLocal: new Date()
-    });
+      const config = await getMercadoPagoConfig();
+      externalReference = makeExternalReference(input.recurrence);
+      const donorFullName = `${input.firstName} ${input.lastName}`.trim();
+      const recurrenceConfig = getRecurrenceConfig(input.recurrence, input.amount);
 
-    if (input.recurrence === 'one_time') {
-      const preference = await createOneTimePreference(config, input, externalReference, donorFullName);
+      await saveCardDonationIntent({
+        title: `Doacao cartao - ${externalReference}`,
+        externalReference,
+        donorFirstName: input.firstName,
+        donorLastName: input.lastName,
+        donorFullName,
+        email: input.email,
+        phone: input.phone,
+        cpf: input.cpf,
+        amount: input.amount,
+        currencyId: DEFAULT_CURRENCY_ID,
+        amountSource: input.amountSource,
+        presetCode: input.presetCode,
+        recurrence: input.recurrence,
+        frequency: recurrenceConfig.frequency,
+        frequencyType: recurrenceConfig.frequencyType,
+        status: 'creating_checkout',
+        zipCode: input.zipCode,
+        street: input.street,
+        streetNumber: input.streetNumber,
+        complement: input.complement,
+        neighborhood: input.neighborhood,
+        city: input.city,
+        state: input.state,
+        createdAtLocal: new Date(),
+        updatedAtLocal: new Date()
+      });
+
+      if (input.recurrence === 'one_time') {
+        const preference = await createOneTimePreference(config, input, externalReference, donorFullName);
+
+        await saveCardDonationIntent({
+          externalReference,
+          status: preference.status || 'pending_checkout',
+          checkoutUrl: preference.checkoutUrl,
+          subscriptionId: '',
+          updatedAtLocal: new Date()
+        });
+
+        return {
+          ok: true,
+          flowType: 'one_time',
+          externalReference,
+          checkoutUrl: preference.checkoutUrl,
+          preferenceId: preference.preferenceId,
+          status: preference.status || 'pending_checkout'
+        };
+      }
+
+      const subscription = await createRecurringSubscription(config, input, externalReference);
 
       await saveCardDonationIntent({
         externalReference,
-        status: preference.status || 'pending_checkout',
-        checkoutUrl: preference.checkoutUrl,
-        subscriptionId: '',
+        status: subscription.status || 'pending',
+        checkoutUrl: subscription.checkoutUrl,
+        subscriptionId: subscription.subscriptionId,
         updatedAtLocal: new Date()
+      });
+
+      await saveRecurringDonation({
+        title: `Assinatura Instituto Comuta - ${externalReference}`,
+        subscriptionId: subscription.subscriptionId,
+        externalReference,
+        payerEmail: input.email,
+        donorFullName,
+        amount: input.amount,
+        currencyId: DEFAULT_CURRENCY_ID,
+        amountSource: input.amountSource,
+        presetCode: input.presetCode,
+        recurrence: input.recurrence,
+        frequency: recurrenceConfig.frequency,
+        frequencyType: recurrenceConfig.frequencyType,
+        status: subscription.status || 'pending',
+        checkoutUrl: subscription.checkoutUrl,
+        nextPaymentDate: subscription.nextPaymentDate,
+        dateCreatedMp: subscription.dateCreatedMp,
+        lastModifiedMp: subscription.lastModifiedMp,
+        cancelledAt: subscription.cancelledAt,
+        reason: subscription.reason,
+        paymentMethodId: subscription.paymentMethodId,
+        liveMode: subscription.liveMode ? 'true' : 'false',
+        rawResponse: safeStringify(subscription.rawResponse)
       });
 
       return {
         ok: true,
-        flowType: 'one_time',
+        flowType: 'recurring',
         externalReference,
-        checkoutUrl: preference.checkoutUrl,
-        preferenceId: preference.preferenceId,
-        status: preference.status || 'pending_checkout'
+        subscriptionId: subscription.subscriptionId,
+        checkoutUrl: subscription.checkoutUrl,
+        status: subscription.status || 'pending'
       };
+    } catch (error) {
+      const friendlyMessage = getFriendlyCheckoutCreationErrorMessage(error);
+      console.error('createHostedDonationCheckout failed:', {
+        externalReference,
+        error: error instanceof Error ? error.message : String(error)
+      });
+
+      if (externalReference) {
+        await saveCardDonationIntent({
+          externalReference,
+          status: 'checkout_error',
+          errorMessage: friendlyMessage,
+          updatedAtLocal: new Date()
+        });
+      }
+
+      throw new Error(friendlyMessage);
     }
-
-    const subscription = await createRecurringSubscription(config, input, externalReference);
-
-    await saveCardDonationIntent({
-      externalReference,
-      status: subscription.status || 'pending',
-      checkoutUrl: subscription.checkoutUrl,
-      subscriptionId: subscription.subscriptionId,
-      updatedAtLocal: new Date()
-    });
-
-    await saveRecurringDonation({
-      title: `Assinatura Instituto Comuta - ${externalReference}`,
-      subscriptionId: subscription.subscriptionId,
-      externalReference,
-      payerEmail: input.email,
-      donorFullName,
-      amount: input.amount,
-      currencyId: DEFAULT_CURRENCY_ID,
-      amountSource: input.amountSource,
-      presetCode: input.presetCode,
-      recurrence: input.recurrence,
-      frequency: recurrenceConfig.frequency,
-      frequencyType: recurrenceConfig.frequencyType,
-      status: subscription.status || 'pending',
-      checkoutUrl: subscription.checkoutUrl,
-      nextPaymentDate: subscription.nextPaymentDate,
-      dateCreatedMp: subscription.dateCreatedMp,
-      lastModifiedMp: subscription.lastModifiedMp,
-      cancelledAt: subscription.cancelledAt,
-      reason: subscription.reason,
-      paymentMethodId: subscription.paymentMethodId,
-      liveMode: subscription.liveMode ? 'true' : 'false',
-      rawResponse: safeStringify(subscription.rawResponse)
-    });
-
-    return {
-      ok: true,
-      flowType: 'recurring',
-      externalReference,
-      subscriptionId: subscription.subscriptionId,
-      checkoutUrl: subscription.checkoutUrl,
-      status: subscription.status || 'pending'
-    };
   }
 );
 
@@ -554,15 +575,19 @@ function buildBackUrls(baseUrl, externalReference, flow) {
  * @param {Record<string, string>} params
  */
 function appendQuery(baseUrl, params) {
-  const url = new URL(baseUrl);
+  try {
+    const url = new URL(baseUrl);
 
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) {
-      url.searchParams.set(key, value);
-    }
-  });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) {
+        url.searchParams.set(key, value);
+      }
+    });
 
-  return url.toString();
+    return url.toString();
+  } catch (error) {
+    throw new Error('A URL de retorno MP_SUBSCRIPTIONS_BACK_URL esta invalida.');
+  }
 }
 
 function makeIdempotencyKey() {
@@ -682,6 +707,35 @@ function normalizeRecurrenceFromApi(autoRecurring) {
   }
 
   return 'monthly';
+}
+
+/**
+ * @param {unknown} error
+ */
+function getFriendlyCheckoutCreationErrorMessage(error) {
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  if (message.includes('MP_ACCESS_TOKEN')) {
+    return 'O token do Mercado Pago nao esta configurado no Wix Secrets.';
+  }
+
+  if (message.includes('MP_SUBSCRIPTIONS_BACK_URL')) {
+    return 'A URL de retorno do Mercado Pago esta faltando ou invalida no Wix Secrets.';
+  }
+
+  if (message.includes('payment_methods not found') || message.includes('payment method')) {
+    return 'O Mercado Pago recusou a forma de pagamento. Revise a conta e as credenciais.';
+  }
+
+  if (message.includes('online payments in Brazil') || message.includes('pagamentos online em Brasil')) {
+    return 'A conta do Mercado Pago ainda nao esta habilitada para esse tipo de cobranca no Brasil.';
+  }
+
+  if (message.includes('Informe')) {
+    return message;
+  }
+
+  return message || 'Nao foi possivel criar o checkout do Mercado Pago.';
 }
 
 /**
