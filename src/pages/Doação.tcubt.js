@@ -1648,6 +1648,10 @@ function esperarCheckoutCartao(ms) {
 function getFriendlyCardCheckoutErrorMessage(error) {
   const message = getErrorMessage(error) || 'Nao foi possivel criar o checkout.';
 
+  if (message.includes('Unable to handle the request')) {
+    return 'O backend da assinatura falhou antes de criar o checkout. Revise os secrets do Mercado Pago e a configuracao da conta.';
+  }
+
   if (message.includes('MP_SUBSCRIPTIONS_BACK_URL')) {
     return 'Falta configurar a URL de retorno do Mercado Pago no painel do Wix.';
   }
@@ -1841,7 +1845,47 @@ function getErrorMessage(error) {
     return error.message;
   }
 
+  if (error && typeof error === 'object') {
+    const nestedMessage = getNestedErrorMessage(error);
+    if (nestedMessage) {
+      return nestedMessage;
+    }
+  }
+
   return String(error || 'Erro desconhecido');
+}
+
+/**
+ * @param {any} error
+ * @returns {string}
+ */
+function getNestedErrorMessage(error) {
+  const candidates = [
+    error?.message,
+    error?.details?.message,
+    error?.details?.applicationError?.message,
+    error?.details?.applicationError?.description,
+    error?.details?.originalError?.message,
+    error?.details?.originalError?.description,
+    error?.data?.message,
+    error?.data?.error,
+    error?.error?.message,
+    error?.cause?.message
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized && serialized !== '{}' ? serialized : '';
+  } catch (serializationError) {
+    return '';
+  }
 }
 
 /**
