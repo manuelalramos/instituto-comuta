@@ -1,5 +1,3 @@
-/* global window */
-
 import { createPixCharge, getPixStatus } from 'backend/pix.web';
 import { createHostedDonationCheckout } from 'backend/subscriptions.web';
 import { lookupAddressByCep } from 'backend/address.web';
@@ -23,6 +21,16 @@ const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inpu
 const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
 const CARD_MESSAGE_SELECTORS = ['#txtCardStatus', '#txtCardMessage'];
 const CARD_SUMMARY_SELECTORS = ['#txtSubscriptionSummary'];
+
+/**
+ * @typedef {{
+ *   formatted?: string;
+ *   streetAddress?: {
+ *     name?: string;
+ *     number?: string;
+ *   };
+ * }} WixAddressValue
+ */
 
 /** @type {string | null} */
 let currentDonationId = null;
@@ -94,11 +102,13 @@ $w.onReady(function () {
  * @param {() => void | Promise<void>} acao
  */
 function registrarClique(seletor, acao) {
-  $w(seletor).onClick(() => {
-    return acao();
-  });
+  registrarCliqueOpcional(seletor, acao);
 }
 
+/**
+ * @param {string} seletor
+ * @param {() => void | Promise<void>} acao
+ */
 function registrarCliqueOpcional(seletor, acao) {
   const elemento = getOptionalElement(seletor);
   if (!elemento || typeof elemento.onClick !== 'function') {
@@ -110,6 +120,10 @@ function registrarCliqueOpcional(seletor, acao) {
   });
 }
 
+/**
+ * @param {string} seletor
+ * @returns {any}
+ */
 function getOptionalElement(seletor) {
   try {
     return $w(seletor);
@@ -119,6 +133,10 @@ function getOptionalElement(seletor) {
   }
 }
 
+/**
+ * @param {string} seletor
+ * @param {string} texto
+ */
 function setTextIfExists(seletor, texto) {
   const elemento = getOptionalElement(seletor);
   if (elemento && 'text' in elemento) {
@@ -126,6 +144,9 @@ function setTextIfExists(seletor, texto) {
   }
 }
 
+/**
+ * @param {string} seletor
+ */
 function hideAndCollapseIfExists(seletor) {
   const elemento = getOptionalElement(seletor);
   if (!elemento) {
@@ -141,6 +162,9 @@ function hideAndCollapseIfExists(seletor) {
   }
 }
 
+/**
+ * @param {string} seletor
+ */
 function showAndExpandIfExists(seletor) {
   const elemento = getOptionalElement(seletor);
   if (!elemento) {
@@ -748,15 +772,14 @@ async function criarCheckoutCartaoHospedado() {
     const payload = coletarPayloadCheckoutCartao();
     const result = await createHostedDonationCheckout(payload);
     const checkoutUrl = normalizeStringCard(result?.checkoutUrl);
-    const redirectUrl = buildCardCheckoutRedirectUrl(result?.externalReference, checkoutUrl);
 
-    if (!redirectUrl) {
+    if (!checkoutUrl) {
       throw new Error('O Mercado Pago nao retornou a URL do checkout.');
     }
 
-    pendingCardCheckoutUrl = redirectUrl;
-    configurarLinkBotaoCheckoutCartao(redirectUrl);
-    redirecionarParaCheckoutCartao(redirectUrl);
+    pendingCardCheckoutUrl = checkoutUrl;
+    configurarLinkBotaoCheckoutCartao(checkoutUrl);
+    redirecionarParaCheckoutCartao(checkoutUrl);
   } catch (error) {
     limparCheckoutCartaoPendente();
     setCardMessage(getFriendlyCardCheckoutErrorMessage(error));
@@ -1127,6 +1150,7 @@ function redirecionarParaCheckoutCartao(checkoutUrl) {
   }
 
   pendingCardCheckoutUrl = url;
+  configurarLinkBotaoCheckoutCartao(url);
   setCheckoutCartaoDisponivel(true);
   hideAndCollapseIfExists('#loadingStrip');
   definirLabelBotaoCheckoutCartao('Abrindo Mercado Pago...');
@@ -1159,13 +1183,37 @@ function abrirCheckoutCartaoPreparado() {
  * @param {string} checkoutUrl
  */
 function configurarLinkBotaoCheckoutCartao(checkoutUrl) {
-  pendingCardCheckoutUrl = resolveCardNavigationUrl(checkoutUrl);
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  const normalizedUrl = resolveCardNavigationUrl(checkoutUrl);
+
+  pendingCardCheckoutUrl = normalizedUrl;
+
+  if (!button || !normalizedUrl) {
+    return;
+  }
+
+  if ('link' in button) {
+    button.link = normalizedUrl;
+  }
+
+  if ('target' in button) {
+    button.target = '_self';
+  }
 }
 
 function limparCheckoutCartaoPendente() {
   pendingCardCheckoutUrl = '';
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = null;
+
+  const button = getOptionalElement('#btnContinueToMercadoPago');
+  if (!button) {
+    return;
+  }
+
+  if ('link' in button) {
+    button.link = '';
+  }
 }
 
 /**
@@ -1181,33 +1229,19 @@ function resolveCardNavigationUrl(checkoutUrl) {
     return normalizedUrl;
   }
 
-  const normalizedPath = normalizedUrl.startsWith('/') ? normalizedUrl : `/${normalizedUrl}`;
-
-  if (typeof window !== 'undefined' && window.location && window.location.origin) {
-    return `${window.location.origin}${normalizedPath}`;
-  }
-
-  const currentUrl = normalizeStringCard(wixLocationFrontend.url);
-  const originMatch = currentUrl.match(/^https?:\/\/[^/]+/i);
-  if (originMatch) {
-    return `${originMatch[0]}${normalizedPath}`;
-  }
-
-  return normalizedPath;
+  return normalizedUrl.startsWith('/') ? normalizedUrl : `/${normalizedUrl}`;
 }
 
 /**
  * @param {string} url
  */
 function navegarParaUrlCartao(url) {
-  if (typeof window !== 'undefined' && window.location && typeof window.location.assign === 'function') {
-    window.location.assign(url);
-    return;
-  }
-
   wixLocationFrontend.to(url);
 }
 
+/**
+ * @param {string} text
+ */
 function setCardMessage(text) {
   const wroteMessage = setFirstExistingText(CARD_MESSAGE_SELECTORS, text);
   if (!wroteMessage && normalizeStringCard(text)) {
@@ -1215,6 +1249,9 @@ function setCardMessage(text) {
   }
 }
 
+/**
+ * @param {string} text
+ */
 function setCardSummary(text) {
   setFirstExistingText(CARD_SUMMARY_SELECTORS, text);
 }
@@ -1275,12 +1312,13 @@ function getStreetValueCartao() {
     return '';
   }
 
+  /** @type {WixAddressValue | string | null | undefined} */
   const value = input.value;
 
   if (value && typeof value === 'object') {
     return normalizeStringCard(
-      value?.streetAddress?.name ||
-      value?.formatted ||
+      value.streetAddress?.name ||
+      value.formatted ||
       ''
     );
   }
@@ -1294,12 +1332,13 @@ function getStreetNumberFromAddressCartao() {
     return '';
   }
 
+  /** @type {WixAddressValue | string | null | undefined} */
   const value = input.value;
   if (!value || typeof value !== 'object') {
     return '';
   }
 
-  return normalizeStringCard(value?.streetAddress?.number || '');
+  return normalizeStringCard(value.streetAddress?.number || '');
 }
 
 /**
@@ -1310,13 +1349,15 @@ function getAddressFormattedValue(value) {
     return '';
   }
 
-  const formatted = normalizeStringCard(value?.formatted || '');
+  /** @type {WixAddressValue} */
+  const addressValue = value;
+  const formatted = normalizeStringCard(addressValue.formatted || '');
   if (formatted) {
     return formatted;
   }
 
-  const streetName = normalizeStringCard(value?.streetAddress?.name || '');
-  const streetNumber = normalizeStringCard(value?.streetAddress?.number || '');
+  const streetName = normalizeStringCard(addressValue.streetAddress?.name || '');
+  const streetNumber = normalizeStringCard(addressValue.streetAddress?.number || '');
 
   if (streetName && streetNumber) {
     return `${streetName}, ${streetNumber}`;
@@ -1480,9 +1521,7 @@ function buildCardCheckoutRedirectUrl(externalReference, fallbackUrl) {
 }
 
 function getCardCheckoutFunctionBasePath() {
-  const currentUrl = normalizeStringCard(
-    typeof window !== 'undefined' && window.location ? window.location.href : wixLocationFrontend.url
-  );
+  const currentUrl = normalizeStringCard(wixLocationFrontend.url);
 
   if (shouldUseCardCheckoutDevFunction(currentUrl)) {
     return '/_functions-dev';
