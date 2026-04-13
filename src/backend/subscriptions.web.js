@@ -301,7 +301,7 @@ async function createOneTimePreference(config, input, externalReference, donorFu
 async function createRecurringSubscription(config, input, externalReference) {
   const recurrence = getRecurrenceConfig(input.recurrence, input.amount);
   const body = {
-    reason: `Doacao ${RECURRENCE_LABELS[input.recurrence] || 'recorrente'} Instituto Comuta`,
+    reason: `Doação ${RECURRENCE_LABELS[input.recurrence] || 'recorrente'} Instituto Comuta`,
     external_reference: externalReference,
     payer_email: input.email,
     auto_recurring: {
