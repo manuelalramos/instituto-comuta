@@ -19,7 +19,7 @@ const CARD_AMOUNT_PRESETS = {
 };
 const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inputEmailCard'];
 const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
-const CARD_MESSAGE_SELECTORS = ['#txtCardStatus', '#txtCardMessage'];
+const CARD_MESSAGE_SELECTORS = ['#textStatus', '#txtCardStatus', '#txtCardMessage'];
 const CARD_SUMMARY_SELECTORS = ['#txtSubscriptionSummary'];
 const CARD_STATUS_LINK_SELECTORS = ['#textStatus'];
 
@@ -1335,6 +1335,17 @@ function setFirstExistingText(selectors, text) {
     const element = getOptionalElement(selector);
     if (element && 'text' in element) {
       element.text = text;
+
+      if (text) {
+        if (typeof element.show === 'function') {
+          element.show();
+        }
+
+        if (typeof element.expand === 'function') {
+          element.expand();
+        }
+      }
+
       return true;
     }
   }
