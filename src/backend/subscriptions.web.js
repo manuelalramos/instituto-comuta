@@ -213,6 +213,58 @@ export const getDonationSubscription = webMethod(
   }
 );
 
+export const findDonationSubscriptionsByEmail = webMethod(
+  Permissions.Anyone,
+  /**
+   * @param {string} email
+   */
+  async (email) => {
+    const normalizedEmail = normalizeString(email).toLowerCase();
+    if (!isValidEmail(normalizedEmail)) {
+      throw new Error('Informe um email valido.');
+    }
+
+    const results = await wixData.query(RECURRING_COLLECTION)
+      .eq('payerEmail', normalizedEmail)
+      .descending('dateCreatedMp')
+      .limit(50)
+      .find();
+
+    return results.items.map(mapRecurringDonationItem);
+  }
+);
+
+export const cancelDonationSubscriptionForEmail = webMethod(
+  Permissions.Anyone,
+  /**
+   * @param {{ email?: string, subscriptionId?: string }} rawInput
+   */
+  async (rawInput) => {
+    const email = normalizeString(rawInput?.email).toLowerCase();
+    const subscriptionId = normalizeString(rawInput?.subscriptionId);
+
+    if (!isValidEmail(email)) {
+      throw new Error('Informe um email valido.');
+    }
+
+    if (!subscriptionId) {
+      throw new Error('subscriptionId obrigatorio.');
+    }
+
+    const results = await wixData.query(RECURRING_COLLECTION)
+      .eq('payerEmail', email)
+      .eq('subscriptionId', subscriptionId)
+      .limit(1)
+      .find();
+
+    if (results.items.length === 0) {
+      throw new Error('Assinatura nao encontrada para esse email.');
+    }
+
+    return updateDonationSubscriptionStatus(subscriptionId, 'cancelled');
+  }
+);
+
 export const cancelDonationSubscription = webMethod(
   Permissions.Anyone,
   /**
@@ -253,7 +305,7 @@ async function createOneTimePreference(config, input, externalReference, donorFu
   const body = {
     items: [
       {
-        title: 'Doacao Instituto Comuta',
+        title: 'Doação Instituto Comuta',
         description: 'Doação única com cartao',
         quantity: 1,
         currency_id: DEFAULT_CURRENCY_ID,
@@ -451,7 +503,7 @@ function validateCheckoutInput(input) {
   if (!isValidBrazilPhone(input.phone)) throw new Error('Informe um celular com DDD.');
   if (!isValidCpf(input.cpf)) throw new Error('Informe um CPF válido.');
   if (!input.amount || Number.isNaN(input.amount) || input.amount <= 0) {
-    throw new Error('Informe um valor válido para a doacao.');
+    throw new Error('Informe um valor válido para a doação.');
   }
   if (!input.recurrence) throw new Error('Selecione a frequencia da doação.');
   if (!isValidZipCode(input.zipCode)) throw new Error('Informe um CEP válido.');
@@ -527,6 +579,28 @@ async function saveCardDonationIntent(itemData) {
  */
 async function saveRecurringDonation(itemData) {
   await upsertCollectionItem(RECURRING_COLLECTION, 'externalReference', itemData);
+}
+
+/**
+ * @param {Record<string, any>} item
+ */
+function mapRecurringDonationItem(item) {
+  return {
+    subscriptionId: normalizeString(item?.subscriptionId),
+    externalReference: normalizeString(item?.externalReference),
+    payerEmail: normalizeString(item?.payerEmail).toLowerCase(),
+    title: normalizeString(item?.title),
+    reason: normalizeString(item?.reason),
+    amount: Number(item?.amount || 0),
+    recurrence: normalizeString(item?.recurrence),
+    status: normalizeString(item?.status),
+    currencyId: normalizeString(item?.currencyId) || DEFAULT_CURRENCY_ID,
+    checkoutUrl: normalizeString(item?.checkoutUrl),
+    nextPaymentDate: parseOptionalDate(item?.nextPaymentDate),
+    dateCreatedMp: parseOptionalDate(item?.dateCreatedMp),
+    lastModifiedMp: parseOptionalDate(item?.lastModifiedMp),
+    cancelledAt: parseOptionalDate(item?.cancelledAt)
+  };
 }
 
 /**
