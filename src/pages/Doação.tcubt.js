@@ -21,6 +21,7 @@ const CARD_EMAIL_PRIMARY_SELECTORS = ['#inputCardEmail', '#input1DAC883', '#inpu
 const CARD_EMAIL_CONFIRM_SELECTORS = ['#inputCardEmailConfirm', '#inputEmailConfirm'];
 const CARD_MESSAGE_SELECTORS = ['#txtCardStatus', '#txtCardMessage'];
 const CARD_SUMMARY_SELECTORS = ['#txtSubscriptionSummary'];
+const CARD_STATUS_LINK_SELECTORS = ['#textStatus'];
 
 /**
  * @typedef {{
@@ -525,6 +526,7 @@ function configurarCheckoutCartao() {
 
 function prepararCheckoutCartao() {
   limparCheckoutCartaoPendente();
+  clearCardStatusLink();
   setCardMessage('Preencha os dados para continuar no Mercado Pago.');
   setCardSummary('Escolha a frequência e o valor para continuar.');
   restaurarLabelBotaoCheckoutCartao();
@@ -779,6 +781,7 @@ async function criarCheckoutCartaoHospedado() {
 
     pendingCardCheckoutUrl = checkoutUrl;
     configurarLinkBotaoCheckoutCartao(checkoutUrl);
+    setCardStatusLink(checkoutUrl, 'Abrir Mercado Pago');
     redirecionarParaCheckoutCartao(checkoutUrl);
   } catch (error) {
     limparCheckoutCartaoPendente();
@@ -1205,6 +1208,7 @@ function limparCheckoutCartaoPendente() {
   pendingCardCheckoutUrl = '';
   clearTimeoutIfExists(cardCheckoutRedirectTimer);
   cardCheckoutRedirectTimer = null;
+  clearCardStatusLink();
 
   const button = getOptionalElement('#btnContinueToMercadoPago');
   if (!button) {
@@ -1254,6 +1258,72 @@ function setCardMessage(text) {
  */
 function setCardSummary(text) {
   setFirstExistingText(CARD_SUMMARY_SELECTORS, text);
+}
+
+/**
+ * @param {string} checkoutUrl
+ * @param {string=} label
+ */
+function setCardStatusLink(checkoutUrl, label) {
+  const normalizedUrl = resolveCardNavigationUrl(checkoutUrl);
+  if (!normalizedUrl) {
+    clearCardStatusLink();
+    return;
+  }
+
+  CARD_STATUS_LINK_SELECTORS.forEach((selector) => {
+    const element = getOptionalElement(selector);
+    if (!element) {
+      return;
+    }
+
+    if ('text' in element) {
+      element.text = label || 'Abrir Mercado Pago';
+    }
+
+    if ('link' in element) {
+      element.link = normalizedUrl;
+    }
+
+    if ('target' in element) {
+      element.target = '_blank';
+    }
+
+    if (typeof element.show === 'function') {
+      element.show();
+    }
+
+    if (typeof element.expand === 'function') {
+      element.expand();
+    }
+
+    if (typeof element.onClick === 'function') {
+      element.onClick(() => {
+        navegarParaUrlCartao(normalizedUrl);
+      });
+    }
+  });
+}
+
+function clearCardStatusLink() {
+  CARD_STATUS_LINK_SELECTORS.forEach((selector) => {
+    const element = getOptionalElement(selector);
+    if (!element) {
+      return;
+    }
+
+    if ('text' in element) {
+      element.text = '';
+    }
+
+    if ('link' in element) {
+      element.link = '';
+    }
+
+    if ('target' in element) {
+      element.target = '';
+    }
+  });
 }
 
 /**
