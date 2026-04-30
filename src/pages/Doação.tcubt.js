@@ -136,6 +136,17 @@ function getOptionalElement(seletor) {
 
 /**
  * @param {string} seletor
+ */
+function focusElementIfExists(seletor) {
+  const elemento = getOptionalElement(seletor);
+
+  if (elemento && typeof elemento.focus === 'function') {
+    elemento.focus();
+  }
+}
+
+/**
+ * @param {string} seletor
  * @param {string} texto
  */
 function setTextIfExists(seletor, texto) {
@@ -554,7 +565,20 @@ function configurarOrdemDeTabCartao() {
     const element = getOptionalElement(selector);
 
     if (element && 'tabIndex' in element) {
-      element.tabIndex = 100 + index;
+      element.tabIndex = 0;
+    }
+
+    const nextSelector = orderedSelectors[index + 1];
+    if (element && nextSelector && typeof element.onKeyPress === 'function') {
+      element.onKeyPress((event) => {
+        if (event.key !== 'Tab') {
+          return;
+        }
+
+        setTimeout(() => {
+          focusElementIfExists(nextSelector);
+        }, 0);
+      });
     }
   });
 }
