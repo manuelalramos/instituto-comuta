@@ -515,6 +515,7 @@ function isValidEmail(email) {
 function configurarCheckoutCartao() {
   prepararCheckoutCartao();
   memorizarLabelsOriginaisCartao();
+  configurarOrdemDeTabCartao();
   configurarBotoesFrequenciaCartao();
   configurarBotoesValorCartao();
   configurarInputValorCartao();
@@ -531,6 +532,31 @@ function prepararCheckoutCartao() {
   setCardSummary('Escolha a frequência e o valor para continuar.');
   restaurarLabelBotaoCheckoutCartao();
   hideAndCollapseIfExists('#loadingStrip');
+}
+
+function configurarOrdemDeTabCartao() {
+  const orderedSelectors = [
+    '#inputFirstName',
+    '#inputLastName',
+    '#inputCpf',
+    '#inputPhone',
+    getFirstExistingSelector(CARD_EMAIL_PRIMARY_SELECTORS),
+    '#inputZipCode',
+    '#inputStreet',
+    '#inputStreetNumber',
+    '#inputComplement',
+    '#inputNeighborhood',
+    '#inputCity',
+    '#inputState'
+  ].filter(Boolean);
+
+  orderedSelectors.forEach((selector, index) => {
+    const element = getOptionalElement(selector);
+
+    if (element && 'tabIndex' in element) {
+      element.tabIndex = 100 + index;
+    }
+  });
 }
 
 function memorizarLabelsOriginaisCartao() {
